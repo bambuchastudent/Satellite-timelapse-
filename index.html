@@ -22,25 +22,60 @@ main{padding-top:20px!important;padding-bottom:45px!important}.topline{display:f
 .coord-help.error{color:#ffbcb4}
 #location-label{color:var(--green);font-weight:700}
 @media(max-width:720px){.headerrow{align-items:flex-start;flex-direction:column}.coordinate{white-space:normal}.coord-inputrow button{flex:1}.coord-inputrow input{min-width:100%}}
+
+/* Zoom, map comparisons and accessible viewer controls */
+.zoom-pad{position:absolute;right:14px;top:44%;transform:translateY(-50%);z-index:5;display:flex;flex-direction:column;gap:5px;background:#092333c9;border:1px solid #557387;border-radius:12px;padding:5px;backdrop-filter:blur(6px)}
+.zoom-pad button{min-width:39px;min-height:39px;padding:5px;font-size:21px;line-height:1.1;font-weight:700;background:#244b60}
+.zoom-pad output{min-width:39px;text-align:center;font-size:11px;color:#fff;white-space:nowrap}
+#stage{touch-action:pan-y}#stage:has(.zoom-pad button:hover){touch-action:none}
+.source-panel{margin:17px 0 21px;background:#0e2533;border:1px solid #4a687b;border-radius:14px;overflow:hidden}
+.source-panel[hidden]{display:none}.source-panel-head{padding:12px 15px;display:flex;gap:13px;flex-wrap:wrap;align-items:center;justify-content:space-between;background:#193a4b}
+.source-panel h2{font-size:17px}.source-panel p{font-size:12px;color:var(--muted);margin:5px 0 0}.source-panel-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.source-panel-actions button{font-size:12px;padding:7px 10px}
+.source-panel-actions a{font-size:12px}.source-frame{width:100%;height:clamp(350px,55vw,590px);border:0;background:#0c1a27;display:block}
+.source-frame-help{padding:10px 14px;border-top:1px solid #365365;color:var(--muted);font-size:12px}
+.source-frame-help a{color:var(--green)}
+@media(max-width:750px){.zoom-pad{right:9px;top:47%}.zoom-pad button{min-width:35px;min-height:35px}.source-frame{height:52vh;min-height:310px}}
+/* Optional dated weather imagery, user-provided aerial frames and recording */
+.sourceextras{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin:0 0 11px}
+.sourceextras .select-label select{margin:0 0 0 6px}
+.sourceextras .smallbutton{min-height:34px}
+.upload-label{cursor:pointer;display:inline-flex;align-items:center;gap:5px;background:#204b58;border:1px solid #4f7b89;border-radius:9px;padding:9px 12px;font-size:12px;font-weight:650}
+.upload-label:hover{background:#2d6070}
+#upload-local{position:absolute;left:-9999px;width:1px;height:1px}
+#local-status{font-size:12px;color:var(--muted);flex:1;min-width:180px}
+.recordbutton{background:#603341;border-color:#9c6176}.recordbutton.recording{background:#992d3d;border-color:#e77b8e}
+@media(max-width:750px){.sourceextras .select-label{width:100%}.sourceextras .upload-label{flex:1;justify-content:center}}
 </style></head><body>
 <header><div class="container"><div class="eyebrow">Историческая спутниковая и воздушная съёмка · весь мир</div><div class="headerrow"><div><h1>Снимки по датам: <span id="location-label">стадион</span></h1><p>Единый просмотрщик снимков · от ранних кадров к поздним · автоматический таймлапс</p></div><div class="coordinate" id="coordinate">📍 <span id="coordinate-value">33.67740833, −7.27224444</span> <button id="copy" title="Копировать координаты" aria-label="Скопировать координаты">⧉</button></div></div></div><div class="coord-panel"><form id="coordinate-form" class="coord-form"><label for="coordinate-input">Укажите другую точку на карте</label><div class="coord-inputrow"><input id="coordinate-input" type="text" value="33.67740833, -7.27224444" placeholder="Широта, долгота" autocomplete="off" spellcheck="false" aria-describedby="coordinate-help"><button type="submit">Показать снимки</button><button type="button" id="reset-location">↺ Стадион</button></div><div id="coordinate-help" class="coord-help" role="status">Пример: 33.67740833, -7.27224444 или 33°40'38.67&quot;N 7°16'20.08&quot;W. Координаты можно передать ссылкой ?lat=...&amp;lon=...</div></form></div></div></header>
 <main class="container">
 <div class="topline"><h2>Источники в одной хронологии <span id="total-count" class="count">0 кадров</span></h2><span class="keynote">Включайте и выключайте источники, не выходя из просмотрщика</span></div>
-<div class="selection"><div class="sourcechips"><label class="chip"><input id="enable-esri" type="checkbox" checked>🛰 <b>Esri Wayback</b> <span id="n-esri" class="count">…</span></label><label class="chip"><input id="enable-oam" type="checkbox" checked>✈️ <b>Аэрофото / OAM</b> <span id="n-oam" class="count">…</span></label><label class="chip"><input id="enable-sentinel" type="checkbox" checked>🌍 <b>Sentinel-2</b> <span id="n-sentinel" class="count">…</span></label></div><div class="selection-left"><label class="select-label">Год <select id="year"><option value="all">Все</option></select></label><label class="select-label">Масштаб <select id="zoom"><option value="16">≈ 500 м</option><option value="17" selected>≈ 250 м</option><option value="18">≈ 125 м</option></select></label><button class="smallbutton" id="download-csv" title="Скачать список дат и ссылок">↓ Список CSV</button></div></div>
+<div class="selection"><div class="sourcechips"><label class="chip"><input id="enable-esri" type="checkbox" checked>🛰 <b>Esri Wayback</b> <span id="n-esri" class="count">…</span></label><label class="chip"><input id="enable-oam" type="checkbox" checked>✈️ <b>Аэрофото / OAM</b> <span id="n-oam" class="count">…</span></label><label class="chip"><input id="enable-sentinel" type="checkbox" checked>🌍 <b>Sentinel-2</b> <span id="n-sentinel" class="count">…</span></label><label class="chip" title="Обзор облаков и поверхности: MODIS Terra, масштаб около 400 км"><input id="enable-nasa" type="checkbox">☁️ <b>NASA MODIS</b> <span id="n-nasa" class="count">0</span></label><label class="chip"><input id="enable-local" type="checkbox" checked>📷 <b>Мои кадры</b> <span id="n-local" class="count">0</span></label></div><div class="selection-left"><label class="select-label">Год <select id="year"><option value="all">Все</option></select></label><label class="select-label">Масштаб <select id="zoom"><option value="12">12 · обзор</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17" selected>17 · стадион</option><option value="18">18</option><option value="19">19 · детально</option><option value="20">20 · максимум</option></select></label><button class="smallbutton" id="download-csv" title="Скачать список дат и ссылок">↓ Список CSV</button></div></div>
 <div class="selection"><div class="selection-left"><label class="chip"><input id="local-changes" type="checkbox" checked>Для Esri: только изменившиеся изображения точки</label><label class="chip"><input id="monthly-sentinel" type="checkbox" checked>Sentinel: лучший кадр месяца</label></div><div class="selection-left"><label class="select-label">Облачность Sentinel ≤ <select id="cloud"><option value="20">20%</option><option value="40" selected>40%</option><option value="60">60%</option><option value="100">100%</option></select></label><button class="smallbutton" id="load-more-sentinel" hidden>↓ Ещё даты Sentinel</button><button class="smallbutton" id="refresh">↻ Обновить</button></div></div>
-<div id="status" role="status" aria-live="polite"><span class="progress"></span> Обращаемся к открытым архивам…</div>
-<section class="player" id="player" aria-label="Хронологический просмотр снимков"><div class="map-stage" id="stage"><div class="stage-empty" id="stage-empty"><div><div style="font-size:42px;margin-bottom:9px">🛰</div><strong>Загружаем снимки этой точки</strong><p>Кадры из подключённых публичных каталогов появятся в хронологическом порядке.</p></div></div><div class="tiles" id="stage-tiles"></div><div class="crosshair" id="crosshair" hidden></div><div class="stage-top"><div class="dateline"><span class="huge" id="view-date">—</span><span class="datekind" id="date-kind">Дата</span></div><span class="labelsource" id="view-source">Обновление каталога</span></div><div class="stage-bottom"><div class="place-label" id="place-label">33.677408° N · 7.272244° W · центр кадра ⊕</div><div class="image-note" id="image-note">Все геопривязанные кадры центрируются на одной точке.</div></div></div><div class="progressbar"><div id="progress-fill"></div></div>
-<div class="controls"><button id="back" class="navbutton" title="Предыдущий кадр (←)" aria-label="Предыдущий">‹</button><button id="play" class="playbutton" title="Пробел — пуск/пауза">▶ Запустить</button><button id="forward" class="navbutton" title="Следующий кадр (→)" aria-label="Следующий">›</button><span class="counter" id="counter">0 / 0</span><div class="range-wrap"><input id="scrub" aria-label="Выбрать кадр на временной шкале" type="range" min="0" max="0" value="0" step="1" disabled></div><label class="speed">Кадр / <select id="speed"><option value="900">0,9 с</option><option value="1500" selected>1,5 с</option><option value="2500">2,5 с</option><option value="4000">4 с</option><option value="6500">6,5 с</option></select></label><label class="loop"><input id="loop" type="checkbox"> Повтор</label><button id="fullscreen" class="smallbutton" title="На весь экран">⛶</button></div>
+  <div class="sourceextras">
+    <label class="select-label" for="nasa-months">Метеоснимки NASA: <select id="nasa-months"><option value="12">12 месяцев</option><option value="36" selected>3 года</option><option value="120">10 лет</option><option value="all">с 2000 года</option></select> · один день в месяц</label>
+    <label for="upload-local" class="upload-label">📷 Добавить собственные аэрофото / кадры <input id="upload-local" type="file" accept="image/png,image/jpeg,image/webp" multiple></label>
+    <button class="smallbutton" id="clear-local" disabled>Очистить свои кадры</button>
+    <span id="local-status" aria-live="polite">Файлы должны иметь дату в имени: 2020-05-12.jpg. Они останутся только в этом браузере до закрытия страницы.</span>
+  </div>
+  <div id="status" role="status" aria-live="polite"><span class="progress"></span> Обращаемся к открытым архивам…</div>
+<section class="player" id="player" aria-label="Хронологический просмотр снимков"><div class="map-stage" id="stage"><div class="stage-empty" id="stage-empty"><div><div style="font-size:42px;margin-bottom:9px">🛰</div><strong>Загружаем снимки этой точки</strong><p>Кадры из подключённых публичных каталогов появятся в хронологическом порядке.</p></div></div><div class="tiles" id="stage-tiles"></div><div class="crosshair" id="crosshair" hidden></div><div class="zoom-pad" aria-label="Масштаб карты"><button id="zoom-in" title="Приблизить" aria-label="Приблизить карту">+</button><output id="zoom-level" aria-label="Уровень масштаба">17</output><button id="zoom-out" title="Отдалить" aria-label="Отдалить карту">−</button></div><div class="stage-top"><div class="dateline"><span class="huge" id="view-date">—</span><span class="datekind" id="date-kind">Дата</span></div><span class="labelsource" id="view-source">Обновление каталога</span></div><div class="stage-bottom"><div class="place-label" id="place-label">33.677408° N · 7.272244° W · центр кадра ⊕</div><div class="image-note" id="image-note">Все геопривязанные кадры центрируются на одной точке.</div></div></div><div class="progressbar"><div id="progress-fill"></div></div>
+<div class="controls"><button id="back" class="navbutton" title="Предыдущий кадр (←)" aria-label="Предыдущий">‹</button><button id="play" class="playbutton" title="Пробел — пуск/пауза">▶ Запустить</button><button id="forward" class="navbutton" title="Следующий кадр (→)" aria-label="Следующий">›</button><span class="counter" id="counter">0 / 0</span><div class="range-wrap"><input id="scrub" aria-label="Выбрать кадр на временной шкале" type="range" min="0" max="0" value="0" step="1" disabled></div><label class="speed">Кадр / <select id="speed"><option value="900">0,9 с</option><option value="1500" selected>1,5 с</option><option value="2500">2,5 с</option><option value="4000">4 с</option><option value="6500">6,5 с</option></select></label><label class="loop"><input id="loop" type="checkbox"> Повтор</label><button id="fullscreen" class="smallbutton" title="На весь экран">⛶</button><button id="record-video" class="smallbutton recordbutton" title="Записать воспроизведение в WebM с разрешением на захват вкладки">● Видео</button><button id="compare-toggle" class="smallbutton" aria-expanded="false" aria-controls="source-panel">◈ Карта Google / сравнить</button></div>
 <div class="filmheader"><span>Лента кадров — автоматически прокручивается вместе с воспроизведением</span><span id="range-dates">—</span></div><div class="film" id="film" aria-label="Миниатюры снимков по датам"><span class="film-placeholder">Поиск доступных дат…</span></div></section>
 <div class="under"><div id="capture-desc">Дата съёмки используется в первую очередь, при отсутствии метаданных — дата публикации версии карты.</div><div><strong id="current-desc">Выберите кадр</strong> <a id="source-link" href="https://livingatlas.arcgis.com/wayback/" target="_blank" rel="noopener noreferrer">Первоисточник ↗</a></div></div>
-<section class="sources-section"><h2>Дополнительные исторические архивы</h2><div class="archive-links"><a href="https://earthexplorer.usgs.gov/" target="_blank" rel="noopener noreferrer">USGS · CORONA / KH-9 ↗</a><a href="https://www.ancfcc.gov.ma/" target="_blank" rel="noopener noreferrer">ANCFCC · архив аэрофотосъёмки Марокко ↗</a><a id="earth-link" href="https://earth.google.com/web/search/33.67740833,-7.27224444" target="_blank" rel="noopener noreferrer">Google Earth · исторические кадры ↗</a><a href="https://livingatlas.arcgis.com/wayback/" target="_blank" rel="noopener noreferrer">Esri Wayback ↗</a><a href="https://imagery.hotosm.org/" target="_blank" rel="noopener noreferrer">OpenAerialMap ↗</a><a id="copernicus-link" href="https://browser.dataspace.copernicus.eu/?zoom=16&lat=33.67740833&lng=-7.27224444" target="_blank" rel="noopener noreferrer">Copernicus Browser ↗</a></div><p class="fineprint">Снимки загружаются из внешних каталогов при открытии HTML с интернетом. Sentinel загружается порциями: кнопка «Ещё даты Sentinel» догружает архив; снимки всех месяцев показываются после отключения фильтра «лучший кадр месяца». Публичные версии Esri не равны всем датам съёмки, и один исходный кадр может повторяться. Sentinel-2 — среднее разрешение (10 м/пикс.): предпросмотры часто показывают <b>всю сцену</b>, а не увеличенную точку. USGS, ANCFCC и Google Earth не импортируются автоматически: они могут требовать отдельного поиска, учётной записи или лицензии. Эта страница не подтверждает, что все когда-либо сделанные снимки этой территории найдены.</p></section>
+<aside id="source-panel" class="source-panel" hidden aria-label="Дополнительный источник для сравнения">
+  <div class="source-panel-head"><div><h2>Спутниковая карта Google Maps · сравнение</h2><p>Тот же центр и приблизительный масштаб. Это <b>не исторический слой</b>; даты кадров в Google Maps не синхронизируются с нашей лентой.</p></div>
+    <div class="source-panel-actions"><a id="panel-google-earth" target="_blank" rel="noopener noreferrer" href="https://earth.google.com/web/search/33.67740833,-7.27224444">Google Earth · история ↗</a><a id="panel-google-maps" target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/@33.67740833,-7.27224444,19z/data=!3m1!1e3">Google Maps ↗</a><button id="compare-close">✕ Скрыть окно</button></div></div>
+  <iframe id="source-frame" class="source-frame" title="Текущая спутниковая карта Google Maps" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+  <div class="source-frame-help">Встроенное отображение зависит от Google и может быть недоступно. Если карта в рамке не появилась, используйте <a id="panel-fallback" target="_blank" rel="noopener noreferrer">Google Maps ↗</a>. Для выбора <b>исторической даты Google Earth</b> откройте Google Earth отдельно и включите «Historical imagery». Исторические снимки Google не импортируются и не включены в счётчик кадров.</div>
+</aside>
+<section class="sources-section"><h2>Дополнительные исторические архивы</h2><div class="archive-links"><a href="https://earthexplorer.usgs.gov/" target="_blank" rel="noopener noreferrer">USGS · CORONA / KH-9 ↗</a><a href="https://www.ancfcc.gov.ma/" target="_blank" rel="noopener noreferrer">ANCFCC · архив аэрофотосъёмки Марокко ↗</a><a id="earth-link" href="https://earth.google.com/web/search/33.67740833,-7.27224444" target="_blank" rel="noopener noreferrer">Google Earth · исторические кадры ↗</a><a href="https://livingatlas.arcgis.com/wayback/" target="_blank" rel="noopener noreferrer">Esri Wayback ↗</a><a href="https://imagery.hotosm.org/" target="_blank" rel="noopener noreferrer">OpenAerialMap ↗</a><a id="copernicus-link" href="https://browser.dataspace.copernicus.eu/?zoom=16&lat=33.67740833&lng=-7.27224444" target="_blank" rel="noopener noreferrer">Copernicus Browser ↗</a></div><p class="fineprint">Снимки загружаются из внешних каталогов при открытии HTML с интернетом. Sentinel загружается порциями: кнопка «Ещё даты Sentinel» догружает архив; снимки всех месяцев показываются после отключения фильтра «лучший кадр месяца». Публичные версии Esri не равны всем датам съёмки, и один исходный кадр может повторяться. Sentinel-2 — среднее разрешение (10 м/пикс.): карта пытается построить вырезку точки из открытого Cloud Optimized GeoTIFF. Это может не сработать из-за ограничений CORS или доступности сервиса. Google Maps можно открыть в отдельной сворачиваемой панели (текущий спутниковый вид без истории). Google Earth не встраивается по условиям Google. NASA GIBS добавляется по выбранным датам (15-е число каждого месяца), кадры могут быть облачными или отсутствовать. Изображения NASA являются региональными обзорами и не показывают отдельные строения стадиона. Пользовательские файлы добавляются локально, без геопривязки, поэтому дата определяется только из имени файла. Функция записи видео требует разрешения браузера на запись вкладки и не гарантирует права на сторонние изображения. USGS, ANCFCC и Google Earth не импортируются автоматически: они могут требовать отдельного поиска, учётной записи или лицензии. Эта страница не подтверждает, что все когда-либо сделанные снимки этой территории найдены.</p></section>
 </main>
 <script type="module">
 const DEFAULT_POS={latitude:33.67740833333333,longitude:-7.27224444444444}; const POS={...DEFAULT_POS},TODAY=new Date().toISOString().slice(0,10);
 const $=s=>document.querySelector(s), dom=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n};
 const timeDate=d=>{if(d===null||d===undefined||d==='')return null;const t=new Date(d);return Number.isNaN(t.getTime())?null:t.toISOString().slice(0,10)};
 const xTile=(lon,z)=>(lon+180)/360*2**z, yTile=(lat,z)=>(1-Math.asinh(Math.tan(lat*Math.PI/180))/Math.PI)/2*2**z;
-let wayback=null, esriAll=[], esriChanges=null, oam=[], sentinel=[], nextSentinel=null, meta=new Map(), selected=null, rows=[], playing=false,timer=null, playbackDelay=1500, zoom=17, cloud=40, year='all', onlyChanges=true, monthly=true, runCount=0, lookupBusy=false, sentinelBusy=false,metadataRunning=false,renderSeq=0,errors=[],sourceStates={esri:'...',oam:'...',sentinel:'...'},sentinelPages=0;
+let sentinelModulesPromise=null,sentinelImageCache=new Map(), esriRefreshTimer=null,localImages=[],localSerial=0,videoRecorder=null,videoStream=null; let wayback=null, esriAll=[], esriChanges=null, oam=[], sentinel=[], nextSentinel=null, meta=new Map(), selected=null, rows=[], playing=false,timer=null, playbackDelay=1500, zoom=17, cloud=40, year='all', onlyChanges=true, monthly=true, runCount=0, lookupBusy=false, sentinelBusy=false,metadataRunning=false,renderSeq=0,errors=[],sourceStates={esri:'...',oam:'...',sentinel:'...'},sentinelPages=0;
 const LIMIT_SENTINEL_PAGES=1000;
 function isValidPosition(lat,lon){return Number.isFinite(lat)&&Number.isFinite(lon)&&Math.abs(lat)<=90&&Math.abs(lon)<=180}
 function parseLocation(value){
@@ -63,32 +98,157 @@ function updatePlace(){
   $('#earth-link').href=`https://earth.google.com/web/search/${lat},${lon}`;
   $('#copernicus-link').href=`https://browser.dataspace.copernicus.eu/?zoom=16&lat=${lat}&lng=${lon}`;
   document.title=`Satellite Timelapse · ${lat}, ${lon}`;
+  const earth=`https://earth.google.com/web/search/${lat},${lon}`;
+  $('#panel-google-earth').href=earth;
+  updateGooglePanel();
   $('#coordinate-help').classList.remove('error');
   $('#coordinate-help').textContent='Пример: 33.67740833, -7.27224444 или 33°40\'38.67\"N 7°16\'20.08\"W. Можно также открыть ссылку с ?lat=...&lon=...';
 }
 function setLocation(lat,lon){
   if(!isValidPosition(lat,lon))return;
+  if(localImages.length)clearLocal();
   POS.latitude=lat;POS.longitude=lon;
   updatePlace();
   try{const url=new URL(location.href);url.searchParams.set('lat',lat.toFixed(8));url.searchParams.set('lon',lon.toFixed(8));history.replaceState(null,'',url)}catch(e){}
   reloadAll();
 }
-function label(src){return src==='esri'?'Esri Wayback':src==='oam'?'Аэрофото / OpenAerialMap':'Sentinel-2'}
+function label(src){return ({esri:'Esri Wayback',oam:'Аэрофото / OpenAerialMap',sentinel:'Sentinel-2',nasa:'NASA MODIS · облака',local:'Мой аэрофотокадр'})[src]||src}
 function status(txt,warn=false,busy=false){$('#status').classList.toggle('warning',warn);$('#status').replaceChildren();if(busy)$('#status').append(dom('span','progress'));$('#status').append(document.createTextNode(txt));}
 function stateMessage(){const loaded=['esri','oam','sentinel'].filter(s=>typeof sourceStates[s]==='number').length;const failed=errors.length?` · Ошибки: ${errors.join('; ')}`:'';status(`Источников проверено: ${loaded}/3 · Esri: ${sourceStates.esri} · Аэрофото: ${sourceStates.oam} · Sentinel: ${sourceStates.sentinel}${nextSentinel?' · Sentinel: доступна следующая страница':''}${failed}`,errors.length>0,loaded<3||sentinelBusy||lookupBusy)}
-function dateFor(item){if(item.src==='esri'){const m=meta.get(item.value.releaseNum);let acquisition=timeDate(m?.date);if(acquisition&&acquisition<=TODAY)return {date:acquisition,kind:'Дата съёмки',actual:true};return{date:item.value.releaseDateLabel||null,kind:'Дата публикации версии',actual:false}}const p=item.value.properties||{};return{date:timeDate(p.datetime)||timeDate(p.start_datetime),kind:'Дата съёмки',actual:true}}
-function sourceUrl(item){if(item.src==='esri')return `https://www.arcgis.com/home/item.html?id=${encodeURIComponent(item.value.itemID)}`;if(item.src==='oam')return item.value.links?.find(l=>l.rel==='self')?.href||'https://imagery.hotosm.org/';const d=dateFor(item).date||TODAY;return `https://browser.dataspace.copernicus.eu/?zoom=16&lat=${POS.latitude}&lng=${POS.longitude}&datasetId=S2_L2A_CDAS&fromTime=${d}T00%3A00%3A00.000Z&toTime=${d}T23%3A59%3A59.999Z&dateMode=SINGLE`}
-function normalized(){const all=[];const ec=onlyChanges&&esriChanges!==null?esriChanges:esriAll;if($('#enable-esri').checked)ec.forEach(v=>all.push({id:'esri:'+v.releaseNum,src:'esri',value:v}));if($('#enable-oam').checked)oam.forEach(v=>all.push({id:'oam:'+v.collection+':'+v.id,src:'oam',value:v}));if($('#enable-sentinel').checked){const ss=sentinel.filter(v=>{let c=v.properties?.['eo:cloud_cover'];return typeof c!=='number'||c<=cloud});let take=ss;if(monthly){const group=new Map();for(const v of ss){const d=(v.properties?.datetime||'').slice(0,7);if(!d)continue;let prev=group.get(d);if(!prev||(v.properties?.['eo:cloud_cover']??100)<(prev.properties?.['eo:cloud_cover']??100))group.set(d,v)}take=[...group.values()]}take.forEach(v=>all.push({id:'sentinel:'+v.id,src:'sentinel',value:v}))}return all}
-function rebuild(preserve=true){const oldId=preserve?selected:null;rows=normalized().filter(r=>{const d=dateFor(r).date;return year==='all'||d?.slice(0,4)===year}).sort((a,b)=>{const x=dateFor(a).date||'9999-12-31',y=dateFor(b).date||'9999-12-31';return x.localeCompare(y)||a.src.localeCompare(b.src)||a.id.localeCompare(b.id)});let idx=oldId?rows.findIndex(i=>i.id===oldId):-1;selected=rows[idx<0?0:idx]?.id||null;$('#total-count').textContent=`${rows.length} кадров`;$('#n-esri').textContent=esriChanges!==null&&onlyChanges?`${esriChanges.length} из ${esriAll.length}`:`${esriAll.length||'…'}`;$('#n-oam').textContent=String(oam.length||((sourceStates.oam==='...')?'…':0));$('#n-sentinel').textContent=sentinel.length?String(sentinel.length):sourceStates.sentinel==='...'?'…':'0';const available=new Set(normalized().map(r=>dateFor(r).date?.slice(0,4)).filter(Boolean));const sel=$('#year');if(sel.options.length!==available.size+1||[...available].some(y=>!sel.querySelector(`option[value="${y}"]`))){sel.replaceChildren(new Option('Все','all'));[...available].sort((a,b)=>a.localeCompare(b)).forEach(y=>sel.add(new Option(y,y)));sel.value=available.has(year)?year:'all';year=sel.value}renderPlayer()}
+function dateFor(item){if(item.src==='local')return {date:item.value.date,kind:'Дата в имени файла',actual:false};if(item.src==='nasa')return {date:item.value.date,kind:'Дата запроса NASA',actual:false};if(item.src==='esri'){const m=meta.get(item.value.releaseNum);let acquisition=timeDate(m?.date);if(acquisition&&acquisition<=TODAY)return {date:acquisition,kind:'Дата съёмки',actual:true};return{date:item.value.releaseDateLabel||null,kind:'Дата публикации версии',actual:false}}const p=item.value.properties||{};return{date:timeDate(p.datetime)||timeDate(p.start_datetime),kind:'Дата съёмки',actual:true}}
+function sourceUrl(item){if(item.src==='local')return item.value.url;if(item.src==='nasa'){let date=item.value.date,delta=1.7;return `https://worldview.earthdata.nasa.gov/?v=${POS.longitude-delta},${POS.latitude-delta},${POS.longitude+delta},${POS.latitude+delta}&t=${date}&l=MODIS_Terra_CorrectedReflectance_TrueColor`;}if(item.src==='esri')return `https://www.arcgis.com/home/item.html?id=${encodeURIComponent(item.value.itemID)}`;if(item.src==='oam')return item.value.links?.find(l=>l.rel==='self')?.href||'https://imagery.hotosm.org/';const d=dateFor(item).date||TODAY;return `https://browser.dataspace.copernicus.eu/?zoom=16&lat=${POS.latitude}&lng=${POS.longitude}&datasetId=S2_L2A_CDAS&fromTime=${d}T00%3A00%3A00.000Z&toTime=${d}T23%3A59%3A59.999Z&dateMode=SINGLE`}
+function nasaDates(){
+  const cutoff=new Date(TODAY+'T12:00:00Z'),max=$('#nasa-months').value;
+  const count=max==='all'?((cutoff.getUTCFullYear()-2000)*12+cutoff.getUTCMonth()):Number(max);
+  const scenes=[];
+  for(let i=1;i<=count;i++){
+    const date=new Date(Date.UTC(cutoff.getUTCFullYear(),cutoff.getUTCMonth()-i,15));
+    if(date.getUTCFullYear()<2000)break;
+    const dateString=date.toISOString().slice(0,10);
+    scenes.push({id:'nasa:'+dateString,src:'nasa',value:{date:dateString}});
+  }
+  return scenes;
+}
+function nasaImage(date,w=800,h=500){
+  // Regional optical cloud/surface survey, deliberately NOT stadium-scale satellite detail.
+  const lat=Math.max(-85,Math.min(85,POS.latitude)),x=6378137*POS.longitude*Math.PI/180;
+  const y=6378137*Math.log(Math.tan(Math.PI/4+lat*Math.PI/360));
+  const mpp=520,left=x-w*mpp/2,right=x+w*mpp/2,bottom=y-h*mpp/2,top=y+h*mpp/2;
+  const params=new URLSearchParams({SERVICE:'WMS',VERSION:'1.1.1',REQUEST:'GetMap',LAYERS:'MODIS_Terra_CorrectedReflectance_TrueColor',STYLES:'',SRS:'EPSG:3857',BBOX:[left,bottom,right,top].join(','),WIDTH:String(w),HEIGHT:String(h),FORMAT:'image/jpeg',TIME:date});
+  return 'https://gibs.earthdata.nasa.gov/wms/epsg3857/best/wms.cgi?'+params;
+}
+function normalized(){const all=[];const ec=onlyChanges&&esriChanges!==null?esriChanges:esriAll;if($('#enable-esri').checked)ec.forEach(v=>all.push({id:'esri:'+v.releaseNum,src:'esri',value:v}));if($('#enable-oam').checked)oam.forEach(v=>all.push({id:'oam:'+v.collection+':'+v.id,src:'oam',value:v}));if($('#enable-sentinel').checked){const ss=sentinel.filter(v=>{let c=v.properties?.['eo:cloud_cover'];return typeof c!=='number'||c<=cloud});let take=ss;if(monthly){const group=new Map();for(const v of ss){const d=(v.properties?.datetime||'').slice(0,7);if(!d)continue;let prev=group.get(d);if(!prev||(v.properties?.['eo:cloud_cover']??100)<(prev.properties?.['eo:cloud_cover']??100))group.set(d,v)}take=[...group.values()]}take.forEach(v=>all.push({id:'sentinel:'+v.id,src:'sentinel',value:v}))}if($('#enable-nasa').checked)all.push(...nasaDates());if($('#enable-local').checked)all.push(...localImages);return all}
+function rebuild(preserve=true){const oldId=preserve?selected:null;rows=normalized().filter(r=>{const d=dateFor(r).date;return year==='all'||d?.slice(0,4)===year}).sort((a,b)=>{const x=dateFor(a).date||'9999-12-31',y=dateFor(b).date||'9999-12-31';return x.localeCompare(y)||a.src.localeCompare(b.src)||a.id.localeCompare(b.id)});let idx=oldId?rows.findIndex(i=>i.id===oldId):-1;selected=rows[idx<0?0:idx]?.id||null;$('#total-count').textContent=`${rows.length} кадров`;$('#n-esri').textContent=esriChanges!==null&&onlyChanges?`${esriChanges.length} из ${esriAll.length}`:`${esriAll.length||'…'}`;$('#n-oam').textContent=String(oam.length||((sourceStates.oam==='...')?'…':0));$('#n-sentinel').textContent=sentinel.length?String(sentinel.length):sourceStates.sentinel==='...'?'…':'0';$('#n-nasa').textContent=$('#enable-nasa').checked?String(nasaDates().length):'0';$('#n-local').textContent=String(localImages.length);const available=new Set(normalized().map(r=>dateFor(r).date?.slice(0,4)).filter(Boolean));const sel=$('#year');if(sel.options.length!==available.size+1||[...available].some(y=>!sel.querySelector(`option[value="${y}"]`))){sel.replaceChildren(new Option('Все','all'));[...available].sort((a,b)=>a.localeCompare(b)).forEach(y=>sel.add(new Option(y,y)));sel.value=available.has(year)?year:'all';year=sel.value}renderPlayer()}
 function tileUrl(item,z,x,y){if(item.src==='esri'){const pattern=item.value.itemURL;return pattern.replace('{level}',z).replace('{row}',y).replace('{col}',x)}let collection=encodeURIComponent(item.value.collection||'openaerialmap');return `https://api.imagery.hotosm.org/raster/collections/${collection}/items/${encodeURIComponent(item.value.id)}/tiles/WebMercatorQuad/${z}/${x}/${y}?assets=visual&nodata=0`}
 function mosaic(host,item,z,compact=false){const w=host.clientWidth||800,h=host.clientHeight||500,cx=xTile(POS.longitude,z)*256,cy=yTile(POS.latitude,z)*256,left=cx-w/2,top=cy-h/2;const minX=Math.floor(left/256),maxX=Math.floor((left+w-1)/256),minY=Math.floor(top/256),maxY=Math.floor((top+h-1)/256);let tiles=0;for(let x=minX;x<=maxX;x++)for(let y=minY;y<=maxY;y++){const pic=dom('img');pic.alt='';pic.decoding='async';pic.loading=compact?'lazy':'eager';pic.referrerPolicy='no-referrer';pic.style.left=(x*256-left)+'px';pic.style.top=(y*256-top)+'px';pic.src=tileUrl(item,z,x,y);host.append(pic);tiles++;}return tiles}
-function sentinelPreview(item){const a=item.value.assets||{};const u=a.thumbnail?.href||a.rendered_preview?.href||a.visual?.href?.match(/\.jpe?g(\?|$)/i)&&a.visual.href||item.value.links?.find(l=>l.rel==='thumbnail')?.href;return typeof u==='string'&&/^https:\/\//.test(u)?u:null}
-function frameMini(frame,item){const image=dom('div','frame-preview');if(item.src==='sentinel'){const url=sentinelPreview(item);if(url){let pic=dom('img');pic.loading='lazy';pic.src=url;pic.alt='';image.append(pic)}}else{const t=dom('div','tiles');image.append(t);requestAnimationFrame(()=>{if(t.isConnected)mosaic(t,item,16,true)})}frame.append(image)}
+function sentinelPreview(item){
+  const a=item.value.assets||{};
+  const refs=[a.thumbnail?.href,a.rendered_preview?.href,item.value.links?.find(l=>l.rel==='thumbnail')?.href];
+  return refs.find(u=>typeof u==='string'&&/^https:\/\//.test(u)&&/\.(?:png|jpe?g|webp)(?:[?#]|$)/i.test(u))||null;
+}
+function googleMapsUrl(){return `https://www.google.com/maps/@${POS.latitude.toFixed(8)},${POS.longitude.toFixed(8)},${Math.min(21,zoom+1)}z/data=!3m1!1e3`}
+function updateGooglePanel(){
+  if(!$('#panel-google-maps'))return;
+  const url=googleMapsUrl();$('#panel-google-maps').href=url;$('#panel-fallback').href=url;
+  // Legacy share-map embed, not Google Earth. It can be refused; the fallback link stays visible.
+  if(!$('#source-panel').hidden)$('#source-frame').src=`https://www.google.com/maps?q=${POS.latitude.toFixed(8)},${POS.longitude.toFixed(8)}&t=k&z=${Math.min(21,zoom+1)}&output=embed`;
+}
+function setCompare(open){
+  const panel=$('#source-panel');panel.hidden=!open;$('#compare-toggle').setAttribute('aria-expanded',String(open));
+  $('#compare-toggle').textContent=open?'✕ Скрыть сравнение':'◈ Карта Google / сравнить';
+  if(open){pause();updateGooglePanel();panel.scrollIntoView({behavior:'smooth',block:'nearest'});}else{$('#source-frame').removeAttribute('src');}
+}
+async function sentinelCrop(item, canvas, loading, seq){
+  const asset=item.value.assets?.visual;
+  if(!asset?.href || !/^https:\/\//.test(asset.href))throw Error('В сцене нет публичного визуального COG');
+  sentinelModulesPromise ||= Promise.all([
+    import('https://esm.sh/geotiff@2.1.3?bundle'),
+    import('https://esm.sh/proj4@2.19.7?bundle')
+  ]);
+  const [geo,projModule]=await sentinelModulesPromise;
+  if(seq!==renderSeq)return;
+  const proj4=projModule.default||projModule;
+  const epsg=asset['proj:epsg']||item.value.properties?.['proj:epsg'];
+  if(!(epsg>=32601&&epsg<=32660)&&!(epsg>=32701&&epsg<=32760))throw Error('Неподдерживаемая система координат сцены');
+  const zone=epsg%100;
+  const utm=`+proj=utm +zone=${zone} ${epsg>=32701?'+south ':''}+datum=WGS84 +units=m +no_defs`;
+  const [cx,cy]=proj4('EPSG:4326',utm,[POS.longitude,POS.latitude]);
+  const key=item.id;
+  let tiff=sentinelImageCache.get(key);
+  if(!tiff){
+    const promise=geo.fromUrl(asset.href);
+    sentinelImageCache.set(key,promise);
+    if(sentinelImageCache.size>6)sentinelImageCache.delete(sentinelImageCache.keys().next().value);
+    tiff=promise;
+  }
+  const geotiff=await tiff, img=await geotiff.getImage();if(seq!==renderSeq)return;
+  const [minX,minY,maxX,maxY]=img.getBoundingBox();
+  const W=canvas.clientWidth||800,H=canvas.clientHeight||500;
+  const metersPerPixel=156543.03392804097*Math.cos(POS.latitude*Math.PI/180)/Math.pow(2,zoom);
+  const viewLeft=cx-W*metersPerPixel/2,viewTop=cy+H*metersPerPixel/2;
+  const resX=(maxX-minX)/img.getWidth(),resY=(maxY-minY)/img.getHeight();
+  const x0=Math.max(0,Math.floor((viewLeft-minX)/resX)), y0=Math.max(0,Math.floor((maxY-viewTop)/resY));
+  const x1=Math.min(img.getWidth(),Math.ceil((viewLeft+W*metersPerPixel-minX)/resX));
+  const y1=Math.min(img.getHeight(),Math.ceil((maxY-(viewTop-H*metersPerPixel))/resY));
+  if(x1<=x0||y1<=y0)throw Error('Выбранная точка вне изображения');
+  const dx=(minX+x0*resX-viewLeft)/metersPerPixel,dy=(viewTop-(maxY-y0*resY))/metersPerPixel;
+  const dw=(x1-x0)*resX/metersPerPixel,dh=(y1-y0)*resY/metersPerPixel;
+  const sw=Math.min(1200,Math.max(1,Math.round(dw))),sh=Math.min(900,Math.max(1,Math.round(dh)));
+  const pixels=await img.readRGB({window:[x0,y0,x1,y1],width:sw,height:sh,interleave:true,resampleMethod:'bilinear'});
+  if(seq!==renderSeq)return;
+  const buffer=document.createElement('canvas');buffer.width=sw;buffer.height=sh;
+  const ctx=buffer.getContext('2d',{willReadFrequently:false});const idata=ctx.createImageData(sw,sh);
+  const channels=Math.round(pixels.length/(sw*sh));
+  for(let i=0;i<sw*sh;i++){const b=i*4,j=i*channels;idata.data[b]=pixels[j];idata.data[b+1]=pixels[j+1]??pixels[j];idata.data[b+2]=pixels[j+2]??pixels[j];idata.data[b+3]=255;}
+  ctx.putImageData(idata,0,0);
+  canvas.width=Math.round(W*devicePixelRatio);canvas.height=Math.round(H*devicePixelRatio);
+  const map=canvas.getContext('2d');map.scale(devicePixelRatio,devicePixelRatio);
+  map.imageSmoothingEnabled=true;map.drawImage(buffer,dx,dy,dw,dh);
+  loading.remove();$('#crosshair').hidden=false;
+}
+function renderSentinel(item,canvas,seq){
+  const message=dom('div','loading-photo','Подготавливаем вырезку Sentinel-2 вокруг точки…');canvas.append(message);
+  const surface=dom('canvas','sceneimg');surface.style.objectFit='fill';canvas.append(surface);
+  const fallback=(error)=>{
+    if(seq!==renderSeq)return;
+    surface.remove();const thumb=sentinelPreview(item);
+    if(thumb){const pic=dom('img','sceneimg');pic.alt='Обзор всей сцены Sentinel-2, не кадр указанной точки';pic.src=thumb;pic.onload=()=>message.remove();pic.onerror=()=>{pic.remove();message.textContent='Растровый просмотр недоступен для этой даты. Откройте первоисточник ↗';};canvas.append(pic)}
+    else message.textContent='Не удалось открыть растр Sentinel-2 в браузере. Откройте сцену в Copernicus Browser ↗';
+    $('#image-note').textContent='Sentinel-2 · 10 м/пикс. Детали стадиона лучше смотреть в Esri/Google Earth.';
+    console.warn('Sentinel raster preview',error);
+  };
+  sentinelCrop(item,surface,message,seq).catch(fallback);
+}
+function frameMini(frame,item){const image=dom('div','frame-preview');if(item.src==='nasa'||item.src==='local'){const pic=dom('img');pic.alt='';pic.loading='lazy';pic.src=item.src==='nasa'?nasaImage(item.value.date,180,90):item.value.url;image.append(pic)}else if(item.src==='sentinel'){const url=sentinelPreview(item);if(url){let pic=dom('img');pic.loading='lazy';pic.src=url;pic.alt='';image.append(pic)}}else{const t=dom('div','tiles');image.append(t);requestAnimationFrame(()=>{if(t.isConnected)mosaic(t,item,16,true)})}frame.append(image)}
 function filmstrip(idx){const film=$('#film'),start=Math.max(0,idx-7),end=Math.min(rows.length,idx+9);film.replaceChildren();if(!rows.length){film.append(dom('span','film-placeholder','Ни одного кадра в выбранных фильтрах. Проверьте сообщения каталога.'));return}if(start>0)film.append(dom('span','film-placeholder',`← ${start} раньше`));for(let i=start;i<end;i++){let item=rows[i],f=dom('button','frame'+(i===idx?' active':''));f.title=`${label(item.src)} · ${dateFor(item).date||'Дата неизвестна'}`;f.setAttribute('aria-label',f.title);frameMini(f,item);let t=dom('div','frame-txt',dateFor(item).date||'Без даты');t.append(dom('small','',label(item.src)));f.append(t);f.onclick=()=>{pause();choose(i)};film.append(f)}if(end<rows.length)film.append(dom('span','film-placeholder',`${rows.length-end} позже →`));film.querySelector('.active')?.scrollIntoView({block:'nearest',inline:'center',behavior:'auto'})}
-function renderPlayer(){const ix=rows.findIndex(v=>v.id===selected),item=ix>=0?rows[ix]:null;$('#counter').textContent=`${item?ix+1:0} / ${rows.length}`;$('#scrub').disabled=!rows.length;$('#scrub').max=String(Math.max(0,rows.length-1));$('#scrub').value=String(Math.max(0,ix));$('#progress-fill').style.width=rows.length>1?`${ix/(rows.length-1)*100}%`:rows.length?'100%':'0%';$('#back').disabled=ix<1;$('#forward').disabled=ix<0||ix===rows.length-1;$('#play').disabled=rows.length<2;$('#range-dates').textContent=rows.length?`${dateFor(rows[0]).date||'?'} → ${dateFor(rows[rows.length-1]).date||'?'}`:'Нет кадров';filmstrip(Math.max(0,ix));const canvas=$('#stage-tiles');const seq=++renderSeq;canvas.replaceChildren();$('#stage-empty').hidden=!!item;$('#crosshair').hidden=!item||item.src==='sentinel';if(!item){$('#view-date').textContent='—';$('#date-kind').textContent='Нет дат';$('#view-source').textContent='Нет кадров';$('#current-desc').textContent='Кадров в фильтре нет';$('#image-note').textContent='Кадры появятся после загрузки доступных каталогов.';return}const dat=dateFor(item);$('#view-date').textContent=dat.date||'Без даты';$('#date-kind').textContent=dat.kind;$('#view-source').textContent=label(item.src);$('#source-link').href=sourceUrl(item);$('#current-desc').textContent=extraInfo(item);if(item.src==='sentinel'){const image=sentinelPreview(item);const placeholder=dom('div','loading-photo',image?'Загрузка общего обзора спутниковой сцены…':'Для этой сцены нет готового предпросмотра');canvas.append(placeholder);if(image){const pic=dom('img','sceneimg');pic.alt='Обзор всей спутниковой сцены, НЕ центрированный на заданной точке';pic.src=image;pic.onload=()=>{if(seq===renderSeq&&placeholder.isConnected)placeholder.remove()};pic.onerror=()=>{if(seq===renderSeq)placeholder.textContent='Предпросмотр не загрузился. Откройте сцену в Copernicus Browser.'};canvas.append(pic)}$('#image-note').textContent='⚠ Sentinel: обзор всей сцены, НЕ кроп заданной точки. Детализация ≈ 10 м/пикс.'}
+function renderPlayer(){const ix=rows.findIndex(v=>v.id===selected),item=ix>=0?rows[ix]:null;$('#counter').textContent=`${item?ix+1:0} / ${rows.length}`;$('#scrub').disabled=!rows.length;$('#scrub').max=String(Math.max(0,rows.length-1));$('#scrub').value=String(Math.max(0,ix));$('#progress-fill').style.width=rows.length>1?`${ix/(rows.length-1)*100}%`:rows.length?'100%':'0%';$('#back').disabled=ix<1;$('#forward').disabled=ix<0||ix===rows.length-1;$('#play').disabled=rows.length<2;$('#range-dates').textContent=rows.length?`${dateFor(rows[0]).date||'?'} → ${dateFor(rows[rows.length-1]).date||'?'}`:'Нет кадров';filmstrip(Math.max(0,ix));const canvas=$('#stage-tiles');const seq=++renderSeq;canvas.replaceChildren();$('#stage-empty').hidden=!!item;$('#crosshair').hidden=!item||['sentinel','local','nasa'].includes(item.src);if(!item){$('#view-date').textContent='—';$('#date-kind').textContent='Нет дат';$('#view-source').textContent='Нет кадров';$('#current-desc').textContent='Кадров в фильтре нет';$('#image-note').textContent='Кадры появятся после загрузки доступных каталогов.';return}const dat=dateFor(item);$('#view-date').textContent=dat.date||'Без даты';$('#date-kind').textContent=dat.kind;$('#view-source').textContent=label(item.src);$('#source-link').href=sourceUrl(item);$('#current-desc').textContent=extraInfo(item);if(item.src==='nasa'||item.src==='local'){
+  const photo=dom('img','sceneimg');photo.alt=item.src==='nasa'?'NASA MODIS: обзор облачности и поверхности на указанную дату':'Пользовательский файл без геопривязки';
+  const notice=dom('div','loading-photo','Загружаем изображение…');canvas.append(notice,photo);
+  photo.src=item.src==='nasa'?nasaImage(item.value.date,Math.min(1200,Math.round(canvas.clientWidth||1000)),Math.min(800,Math.round(canvas.clientHeight||560))):item.value.url;
+  photo.onload=()=>{if(seq===renderSeq)notice.remove()};
+  photo.onerror=()=>{if(seq===renderSeq){photo.remove();notice.textContent=item.src==='nasa'?'NASA не предоставила изображение для этой даты. Откройте NASA Worldview ↗':'Не удалось прочитать локальный файл.'}};
+  $('#image-note').textContent=item.src==='nasa'?'NASA MODIS Terra · обзор облаков и местности, примерно 500 м/пикс. · дата запроса, не подтверждённый кадр стадиона.':'Собственный файл · без геопривязки · дата из имени файла.';
+}
+else if(item.src==='sentinel'){
+  renderSentinel(item,canvas,seq);
+  $('#image-note').textContent='Sentinel-2 · 10 м/пикс. · вырезка выбранной точки, а не вся спутниковая сцена.';
+}
 else{const placeholder=dom('div','loading-photo','Загрузка карты…');canvas.append(placeholder);const tileLayer=dom('div','tiles');canvas.append(tileLayer);requestAnimationFrame(()=>{if(seq!==renderSeq)return;let total=0,done=0;const z=zoom;total=mosaic(tileLayer,item,z);tileLayer.querySelectorAll('img').forEach(pic=>{const mark=()=>{done++;if(done>=1&&seq===renderSeq&&placeholder.isConnected)placeholder.remove()};pic.onload=mark;pic.onerror=mark});if(!total)placeholder.textContent='Нет тайлов'});$('#image-note').textContent=item.src==='esri'?(dat.actual?'Детальный снимок, координаты строго по центру':'Версия карты. Дата оригинальной съёмки пока не подтверждена.'):'Аэрофото или спутниковый снимок из открытого каталога, центрирован по координатам.'}}
-function extraInfo(item){const m=item.src==='esri'?meta.get(item.value.releaseNum):item.value.properties||{};if(item.src==='esri')return `${m?.provider||'Поставщик не указан'}${m?.resolution?' · '+m.resolution+' м/пикс.':''}`;if(item.src==='oam')return `${m?.['oam:platform_type']||'аэросъёмка'} · ${m?.gsd||'?'} м/пикс. · ${m?.['oam:producer_name']||'OAM'}`;return `Облачность ${Math.round(m?.['eo:cloud_cover']??0)}% · 10 м/пикс. · обзор сцены`}
+function extraInfo(item){if(item.src==='nasa')return 'NASA GIBS · MODIS Terra (облака и поверхность, обзор ~400 км, дата запроса)';if(item.src==='local')return `Локальный файл · ${item.value.name} · без геопривязки`;const m=item.src==='esri'?meta.get(item.value.releaseNum):item.value.properties||{};if(item.src==='esri')return `${m?.provider||'Поставщик не указан'}${m?.resolution?' · '+m.resolution+' м/пикс.':''}`;if(item.src==='oam')return `${m?.['oam:platform_type']||'аэросъёмка'} · ${m?.gsd||'?'} м/пикс. · ${m?.['oam:producer_name']||'OAM'}`;return `Облачность ${Math.round(m?.['eo:cloud_cover']??0)}% · 10 м/пикс. · обзор сцены`}
 function choose(ix){if(!rows.length)return;selected=rows[Math.max(0,Math.min(ix,rows.length-1))].id;renderPlayer()}
+const MIN_ZOOM=12,MAX_ZOOM=20;
+function setZoom(z){
+  const next=Math.max(MIN_ZOOM,Math.min(MAX_ZOOM,Math.round(z)));
+  if(next===zoom)return;zoom=next;
+  $('#zoom-level').textContent=String(zoom);
+  $('#zoom').value=String(zoom);
+  updateGooglePanel();renderPlayer();
+  clearTimeout(esriRefreshTimer);
+  esriRefreshTimer=setTimeout(()=>{
+    if(onlyChanges&&wayback){esriChanges=null;changesEsri()}
+    else if(wayback)queryMetadata(esriAll.slice(0,50));
+  },550);
+}
 function pause(){playing=false;clearTimeout(timer);timer=null;$('#play').textContent='▶ Запустить';$('#play').setAttribute('aria-pressed','false')}
 function tick(){if(!playing)return;let idx=rows.findIndex(i=>i.id===selected);if(idx<rows.length-1)choose(idx+1);else if($('#loop').checked)choose(0);else{pause();return}timer=setTimeout(tick,playbackDelay)}
 function togglePlayback(){if(playing){pause();return}if(rows.length<2)return;if(rows.findIndex(r=>r.id===selected)>=rows.length-1)choose(0);playing=true;$('#play').textContent='⏸ Пауза';$('#play').setAttribute('aria-pressed','true');timer=setTimeout(tick,playbackDelay)}
@@ -100,19 +260,64 @@ async function changesEsri(){if(!wayback||lookupBusy)return;const token=runCount
 async function queryMetadata(items){if(!wayback||metadataRunning||!items.length)return;const token=runCount,coords={...POS},scale=zoom,wb=wayback;metadataRunning=true;const list=items.filter(v=>!meta.has(v.releaseNum)).slice(0,150);let cursor=0,loaded=0;const worker=async()=>{while(cursor<list.length&&token===runCount){const v=list[cursor++];try{const m=await wb.getMetadata(coords,scale,v.releaseNum)||{};if(token!==runCount)return;meta.set(v.releaseNum,m)}catch(e){if(token!==runCount)return;meta.set(v.releaseNum,{})}loaded++;if(loaded%5===0){rebuild();await new Promise(res=>setTimeout(res,0))}}};await Promise.all(Array.from({length:Math.min(4,list.length)},()=>worker()));if(token===runCount){metadataRunning=false;rebuild()}}
 async function loadOAM(){const token=runCount,coords={...POS};try{const r=.004,b=[coords.longitude-r,coords.latitude-r,coords.longitude+r,coords.latitude+r].join(',');let href=`https://api.imagery.hotosm.org/stac/search?bbox=${encodeURIComponent(b)}&limit=200`,page=0,items=new Map();while(href&&page<8){const res=await fetch(href);if(!res.ok)throw Error(`HTTP ${res.status}`);const d=await res.json();if(token!==runCount)return;(d.features||[]).filter(f=>usableScene(f)&&f.assets?.visual&&f.collection&&!/dem|elevation/i.test(f.collection)).forEach(f=>items.set(f.collection+':'+f.id,f));oam=[...items.values()];sourceStates.oam=oam.length;stateMessage();rebuild();page++;let link=d.links?.find(x=>x.rel==='next');href=link?.href||null;if(href&&!/^https:\/\//.test(href))href=new URL(href,'https://api.imagery.hotosm.org').href}sourceStates.oam=oam.length;rebuild();stateMessage()}catch(e){if(token!==runCount)return;sourceStates.oam='ошибка';errors.push('OpenAerialMap');stateMessage();console.warn('OpenAerialMap',e)}}
 async function loadSentinel(reset=false){if(sentinelBusy)return;const token=runCount,coords={...POS};sentinelBusy=true;if(reset){sentinel=[];nextSentinel=null;sentinelPages=0}try{let href=nextSentinel?.href||`https://earth-search.aws.element84.com/v1/collections/sentinel-2-l2a/items?bbox=${encodeURIComponent([coords.longitude-.001,coords.latitude-.001,coords.longitude+.001,coords.latitude+.001].join(','))}&datetime=2015-06-01T00%3A00%3A00Z%2F${TODAY}T23%3A59%3A59Z&limit=200`;let method=nextSentinel?.method||'GET',body=nextSentinel?.body||null;let seen=new Set(sentinel.map(v=>v.id));for(let j=0;j<4&&href&&sentinelPages<LIMIT_SENTINEL_PAGES;j++){const opt={method};if(method!=='GET'){opt.headers={'Content-Type':'application/json'};opt.body=JSON.stringify(body||{})}const res=await fetch(href,opt);if(!res.ok)throw Error(`HTTP ${res.status}`);const d=await res.json();if(token!==runCount)return;for(const f of d.features||[]){if(usableScene(f)&&!seen.has(f.id)){sentinel.push(f);seen.add(f.id)}}const nx=d.links?.find(x=>x.rel==='next')||null;nextSentinel=nx;sentinelPages++;sourceStates.sentinel=sentinel.length;stateMessage();rebuild();href=nx?.href||null;if(href&&!/^https:\/\//.test(href))href=new URL(href,'https://earth-search.aws.element84.com').href;method=nx?.method||'GET';body=nx?.body||null;if(!href)break}sourceStates.sentinel=sentinel.length;$('#load-more-sentinel').hidden=!nextSentinel;rebuild();stateMessage()}catch(e){if(token!==runCount)return;sourceStates.sentinel=sentinel.length||'ошибка';$('#load-more-sentinel').hidden=!nextSentinel;errors.push('Sentinel STAC');stateMessage();console.warn('Sentinel',e)}finally{if(token===runCount){sentinelBusy=false;stateMessage()}}}
-function csv(){const head=[['Источник','Дата в галерее','Тип даты','Дата съёмки','Дата выпуска карты','Поставщик','Разрешение (м/пикс)','Облачность (%)','ID','Ссылка']];for(const item of rows){const d=dateFor(item);let m=item.src==='esri'?meta.get(item.value.releaseNum)||{}:item.value.properties||{};head.push([label(item.src),d.date,d.kind,item.src==='esri'?timeDate(m.date)||'':d.date,item.src==='esri'?item.value.releaseDateLabel:'',m.provider||m['oam:producer_name']||'',m.resolution||m.gsd||(item.src==='sentinel'?10:''),m['eo:cloud_cover']??'',item.id,sourceUrl(item)])}const lines=head.map(row=>row.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\r\n');const url=URL.createObjectURL(new Blob(['\ufeff',lines],{type:'text/csv;charset=utf-8'}));const a=dom('a');a.href=url;a.download=`timeline_satellite_aerial_${POS.latitude.toFixed(5)}_${POS.longitude.toFixed(5)}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),5000)}
+function csv(){const head=[['Источник','Дата в галерее','Тип даты','Дата съёмки','Дата выпуска карты','Поставщик','Разрешение (м/пикс)','Облачность (%)','ID','Ссылка']];for(const item of rows){const d=dateFor(item);let m=item.src==='esri'?meta.get(item.value.releaseNum)||{}:item.value.properties||{};head.push([label(item.src),d.date,d.kind,item.src==='esri'?timeDate(m.date)||'':item.src==='nasa'?'':d.date,item.src==='esri'?item.value.releaseDateLabel:'',m.provider||m['oam:producer_name']||(item.src==='nasa'?'NASA GIBS':''),m.resolution||m.gsd||(item.src==='sentinel'?10:item.src==='nasa'?'около 500':''),m['eo:cloud_cover']??'',item.id,item.src==='local'?item.value.name:sourceUrl(item)])}const lines=head.map(row=>row.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\r\n');const url=URL.createObjectURL(new Blob(['\ufeff',lines],{type:'text/csv;charset=utf-8'}));const a=dom('a');a.href=url;a.download=`timeline_satellite_aerial_${POS.latitude.toFixed(5)}_${POS.longitude.toFixed(5)}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),5000)}
 $('#play').onclick=togglePlayback;$('#back').onclick=()=>{pause();choose(rows.findIndex(v=>v.id===selected)-1)};$('#forward').onclick=()=>{pause();choose(rows.findIndex(v=>v.id===selected)+1)};$('#scrub').oninput=e=>{pause();choose(+e.target.value)};$('#speed').onchange=e=>{playbackDelay=+e.target.value;if(playing){clearTimeout(timer);timer=setTimeout(tick,playbackDelay)}};
-for(const id of ['enable-esri','enable-oam','enable-sentinel','monthly-sentinel'])$('#'+id).onchange=()=>{pause();monthly=$('#monthly-sentinel').checked;rebuild()};
+for(const id of ['enable-esri','enable-oam','enable-sentinel','enable-nasa','enable-local','monthly-sentinel'])$('#'+id).onchange=()=>{pause();monthly=$('#monthly-sentinel').checked;rebuild()};
+$('#nasa-months').onchange=()=>{pause();rebuild()};
 $('#local-changes').onchange=e=>{pause();onlyChanges=e.target.checked;if(onlyChanges&&esriChanges===null)changesEsri();else if(!onlyChanges&&wayback)queryMetadata(esriAll.slice(0,50));rebuild()};
-$('#cloud').onchange=e=>{pause();cloud=+e.target.value;rebuild()};$('#year').onchange=e=>{pause();year=e.target.value;rebuild()};$('#zoom').onchange=e=>{pause();zoom=+e.target.value;if(onlyChanges&&wayback){esriChanges=null;changesEsri()}else if(wayback)queryMetadata(esriAll.slice(0,50));renderPlayer()};
+$('#cloud').onchange=e=>{pause();cloud=+e.target.value;rebuild()};$('#year').onchange=e=>{pause();year=e.target.value;rebuild()};$('#zoom').onchange=e=>{setZoom(+e.target.value)};
 function reloadAll(){
-  ++runCount;pause();errors=[];sourceStates={esri:'...',oam:'...',sentinel:'...'};
+  ++runCount;pause();errors=[];sentinelImageCache.clear();sourceStates={esri:'...',oam:'...',sentinel:'...'};
   esriAll=[];esriChanges=null;oam=[];sentinel=[];nextSentinel=null;sentinelPages=0;wayback=null;
   lookupBusy=false;sentinelBusy=false;metadataRunning=false;
   $('#load-more-sentinel').hidden=true;meta.clear();year='all';$('#year').value='all';
   rebuild(false);stateMessage();
   Promise.allSettled([loadEsri(),loadOAM(),loadSentinel(true)]);
 }
+$('#zoom-in').onclick=()=>setZoom(zoom+1);$('#zoom-out').onclick=()=>setZoom(zoom-1);
+$('#stage').addEventListener('wheel',e=>{if(e.ctrlKey||e.shiftKey)return;e.preventDefault();setZoom(zoom+(e.deltaY<0?1:-1))},{passive:false});
+let pinchStart=null,pinchZoom=zoom;
+$('#stage').addEventListener('touchstart',e=>{if(e.touches.length===2){const a=e.touches[0],b=e.touches[1];pinchStart=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);pinchZoom=zoom;}},{passive:true});
+$('#stage').addEventListener('touchmove',e=>{if(e.touches.length===2&&pinchStart){e.preventDefault();const a=e.touches[0],b=e.touches[1];const dist=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);setZoom(pinchZoom+Math.log2(dist/pinchStart)*2);}},{passive:false});
+$('#stage').addEventListener('touchend',e=>{if(e.touches.length<2)pinchStart=null;});
+$('#compare-toggle').onclick=()=>setCompare($('#source-panel').hidden);
+$('#compare-close').onclick=()=>setCompare(false);
+$('#upload-local').onchange=e=>{
+  const files=[...e.target.files],skipped=[];let added=0;
+  for(const file of files){
+    const m=file.name.match(/(?:^|[^0-9])(20\d\d|19\d\d)[_.-](0[1-9]|1[0-2])[_.-](0[1-9]|[12]\d|3[01])(?:[^0-9]|$)/);
+    if(!m||!timeDate(`${m[1]}-${m[2]}-${m[3]}`)||timeDate(`${m[1]}-${m[2]}-${m[3]}`)!==`${m[1]}-${m[2]}-${m[3]}`){skipped.push(file.name);continue}
+    if(file.size>25*1024*1024){skipped.push(file.name+' (>25 МБ)');continue}
+    localImages.push({id:'local:'+(++localSerial),src:'local',value:{date:`${m[1]}-${m[2]}-${m[3]}`,name:file.name,url:URL.createObjectURL(file)}});added++;
+  }
+  e.target.value='';$('#clear-local').disabled=!localImages.length;
+  $('#local-status').textContent=`Добавлено: ${added}. Всего: ${localImages.length}.${skipped.length?' Пропущены (нет корректной даты в имени или файл слишком большой): '+skipped.slice(0,3).join(', '):''}`;
+  if(added){pause();rebuild()}
+};
+function clearLocal(){localImages.forEach(v=>URL.revokeObjectURL(v.value.url));localImages=[];$('#clear-local').disabled=true;$('#local-status').textContent='Локальные кадры очищены. Импортируйте файлы с датами YYYY-MM-DD в имени.';rebuild();}
+$('#clear-local').onclick=clearLocal;
+$('#record-video').onclick=async()=>{
+  if(videoRecorder&&videoRecorder.state==='recording'){videoRecorder.stop();return}
+  if(!navigator.mediaDevices?.getDisplayMedia||typeof MediaRecorder==='undefined'){
+    status('Этот браузер не поддерживает запись вкладки. Используйте современный Chrome/Edge на компьютере.',true);return
+  }
+  try{
+    if(!$('#source-panel').hidden)setCompare(false);
+    videoStream=await navigator.mediaDevices.getDisplayMedia({video:{displaySurface:'browser'},audio:false});
+    const mime=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'].find(x=>MediaRecorder.isTypeSupported(x));
+    const chunks=[];videoRecorder=new MediaRecorder(videoStream,mime?{mimeType:mime}:{});
+    videoRecorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
+    videoRecorder.onstop=()=>{
+      const file=new Blob(chunks,{type:videoRecorder?.mimeType||'video/webm'}),url=URL.createObjectURL(file),link=dom('a');
+      link.href=url;link.download=`satellite_timelapse_${POS.latitude.toFixed(5)}_${POS.longitude.toFixed(5)}.webm`;link.click();setTimeout(()=>URL.revokeObjectURL(url),30000);
+      videoStream?.getTracks().forEach(t=>t.stop());videoStream=null;videoRecorder=null;
+      $('#record-video').textContent='● Видео';$('#record-video').classList.remove('recording');pause();
+    };
+    videoStream.getVideoTracks()[0].onended=()=>{if(videoRecorder?.state==='recording')videoRecorder.stop()};
+    videoRecorder.start(300);$('#record-video').textContent='■ Завершить';$('#record-video').classList.add('recording');
+    if(rows.length>=2&&!playing)togglePlayback();
+  }catch(err){status('Запись отменена или доступ к вкладке не предоставлен.',true)}
+};
 $('#refresh').onclick=reloadAll;
 $('#coordinate-form').onsubmit=e=>{e.preventDefault();const result=parseLocation($('#coordinate-input').value);if(!result){$('#coordinate-help').textContent='Ошибка: введите широту от -90 до 90 и долготу от -180 до 180 в десятичном формате или DMS.';$('#coordinate-help').classList.add('error');return}setLocation(result.lat,result.lon)};
 $('#reset-location').onclick=()=>setLocation(DEFAULT_POS.latitude,DEFAULT_POS.longitude);
