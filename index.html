@@ -44,6 +44,12 @@ main{padding-top:20px!important;padding-bottom:45px!important}.topline{display:f
 #upload-local{position:absolute;left:-9999px;width:1px;height:1px}
 #local-status{font-size:12px;color:var(--muted);flex:1;min-width:180px}
 .recordbutton{background:#603341;border-color:#9c6176}.recordbutton.recording{background:#992d3d;border-color:#e77b8e}
+.cachebar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:3px 0 14px;padding:11px 13px;background:#142d3b;border:1px solid #375468;border-radius:12px}
+.cachebar button{min-height:36px}
+#cache-status{font-size:12px;color:var(--muted);flex:1;min-width:160px}
+#last-video{font-size:13px;font-weight:750;color:var(--green)}
+#cache-progress{width:100%;height:5px;appearance:none;accent-color:var(--green);border:0;display:none}
+#cache-progress:not([hidden]){display:block}
 @media(max-width:750px){.sourceextras .select-label{width:100%}.sourceextras .upload-label{flex:1;justify-content:center}}
 </style></head><body>
 <header><div class="container"><div class="eyebrow">Историческая спутниковая и воздушная съёмка · весь мир</div><div class="headerrow"><div><h1>Снимки по датам: <span id="location-label">стадион</span></h1><p>Единый просмотрщик снимков · от ранних кадров к поздним · автоматический таймлапс</p></div><div class="coordinate" id="coordinate">📍 <span id="coordinate-value">33.67740833, −7.27224444</span> <button id="copy" title="Копировать координаты" aria-label="Скопировать координаты">⧉</button></div></div></div><div class="coord-panel"><form id="coordinate-form" class="coord-form"><label for="coordinate-input">Укажите другую точку на карте</label><div class="coord-inputrow"><input id="coordinate-input" type="text" value="33.67740833, -7.27224444" placeholder="Широта, долгота" autocomplete="off" spellcheck="false" aria-describedby="coordinate-help"><button type="submit">Показать снимки</button><button type="button" id="reset-location">↺ Стадион</button></div><div id="coordinate-help" class="coord-help" role="status">Пример: 33.67740833, -7.27224444 или 33°40'38.67&quot;N 7°16'20.08&quot;W. Координаты можно передать ссылкой ?lat=...&amp;lon=...</div></form></div></div></header>
@@ -57,9 +63,16 @@ main{padding-top:20px!important;padding-bottom:45px!important}.topline{display:f
     <button class="smallbutton" id="clear-local" disabled>Очистить свои кадры</button>
     <span id="local-status" aria-live="polite">Файлы должны иметь дату в имени: 2020-05-12.jpg. Они останутся только в этом браузере до закрытия страницы.</span>
   </div>
+  <div class="cachebar" aria-label="Подготовка и кэш изображений">
+    <button class="smallbutton" id="prepare-frames" title="Сохранить обработанные снимки в памяти этого браузера">⬇ Подготовить кадры</button>
+    <button class="smallbutton" id="clear-frame-cache">Очистить кэш</button>
+    <span id="cache-status" role="status" aria-live="polite">Кадры сохраняются по точке, масштабу и дате. Повторная загрузка не требуется, если кэш уже заполнен.</span>
+    <progress id="cache-progress" value="0" max="100" hidden></progress>
+    <a id="last-video" hidden download="satellite_timelapse.webm">↓ Скачать видео</a>
+  </div>
   <div id="status" role="status" aria-live="polite"><span class="progress"></span> Обращаемся к открытым архивам…</div>
 <section class="player" id="player" aria-label="Хронологический просмотр снимков"><div class="map-stage" id="stage"><div class="stage-empty" id="stage-empty"><div><div style="font-size:42px;margin-bottom:9px">🛰</div><strong>Загружаем снимки этой точки</strong><p>Кадры из подключённых публичных каталогов появятся в хронологическом порядке.</p></div></div><div class="tiles" id="stage-tiles"></div><div class="crosshair" id="crosshair" hidden></div><div class="zoom-pad" aria-label="Масштаб карты"><button id="zoom-in" title="Приблизить" aria-label="Приблизить карту">+</button><output id="zoom-level" aria-label="Уровень масштаба">17</output><button id="zoom-out" title="Отдалить" aria-label="Отдалить карту">−</button></div><div class="stage-top"><div class="dateline"><span class="huge" id="view-date">—</span><span class="datekind" id="date-kind">Дата</span></div><span class="labelsource" id="view-source">Обновление каталога</span></div><div class="stage-bottom"><div class="place-label" id="place-label">33.677408° N · 7.272244° W · центр кадра ⊕</div><div class="image-note" id="image-note">Все геопривязанные кадры центрируются на одной точке.</div></div></div><div class="progressbar"><div id="progress-fill"></div></div>
-<div class="controls"><button id="back" class="navbutton" title="Предыдущий кадр (←)" aria-label="Предыдущий">‹</button><button id="play" class="playbutton" title="Пробел — пуск/пауза">▶ Запустить</button><button id="forward" class="navbutton" title="Следующий кадр (→)" aria-label="Следующий">›</button><span class="counter" id="counter">0 / 0</span><div class="range-wrap"><input id="scrub" aria-label="Выбрать кадр на временной шкале" type="range" min="0" max="0" value="0" step="1" disabled></div><label class="speed">Кадр / <select id="speed"><option value="900">0,9 с</option><option value="1500" selected>1,5 с</option><option value="2500">2,5 с</option><option value="4000">4 с</option><option value="6500">6,5 с</option></select></label><label class="loop"><input id="loop" type="checkbox"> Повтор</label><button id="fullscreen" class="smallbutton" title="На весь экран">⛶</button><button id="record-video" class="smallbutton recordbutton" title="Записать воспроизведение в WebM с разрешением на захват вкладки">● Видео</button><button id="compare-toggle" class="smallbutton" aria-expanded="false" aria-controls="source-panel">◈ Карта Google / сравнить</button></div>
+<div class="controls"><button id="back" class="navbutton" title="Предыдущий кадр (←)" aria-label="Предыдущий">‹</button><button id="play" class="playbutton" title="Пробел — пуск/пауза">▶ Запустить</button><button id="forward" class="navbutton" title="Следующий кадр (→)" aria-label="Следующий">›</button><span class="counter" id="counter">0 / 0</span><div class="range-wrap"><input id="scrub" aria-label="Выбрать кадр на временной шкале" type="range" min="0" max="0" value="0" step="1" disabled></div><label class="speed">Кадр / <select id="speed"><option value="900">0,9 с</option><option value="1500" selected>1,5 с</option><option value="2500">2,5 с</option><option value="4000">4 с</option><option value="6500">6,5 с</option></select></label><label class="loop"><input id="loop" type="checkbox"> Повтор</label><button id="fullscreen" class="smallbutton" title="На весь экран">⛶</button><button id="record-video" class="smallbutton recordbutton" title="Создать WebM из кэшированных кадров, без записи экрана">↓ Видео WebM</button><button id="compare-toggle" class="smallbutton" aria-expanded="false" aria-controls="source-panel">◈ Карта Google / сравнить</button></div>
 <div class="filmheader"><span>Лента кадров — автоматически прокручивается вместе с воспроизведением</span><span id="range-dates">—</span></div><div class="film" id="film" aria-label="Миниатюры снимков по датам"><span class="film-placeholder">Поиск доступных дат…</span></div></section>
 <div class="under"><div id="capture-desc">Дата съёмки используется в первую очередь, при отсутствии метаданных — дата публикации версии карты.</div><div><strong id="current-desc">Выберите кадр</strong> <a id="source-link" href="https://livingatlas.arcgis.com/wayback/" target="_blank" rel="noopener noreferrer">Первоисточник ↗</a></div></div>
 <aside id="source-panel" class="source-panel" hidden aria-label="Дополнительный источник для сравнения">
@@ -68,14 +81,146 @@ main{padding-top:20px!important;padding-bottom:45px!important}.topline{display:f
   <iframe id="source-frame" class="source-frame" title="Текущая спутниковая карта Google Maps" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
   <div class="source-frame-help">Встроенное отображение зависит от Google и может быть недоступно. Если карта в рамке не появилась, используйте <a id="panel-fallback" target="_blank" rel="noopener noreferrer">Google Maps ↗</a>. Для выбора <b>исторической даты Google Earth</b> откройте Google Earth отдельно и включите «Historical imagery». Исторические снимки Google не импортируются и не включены в счётчик кадров.</div>
 </aside>
-<section class="sources-section"><h2>Дополнительные исторические архивы</h2><div class="archive-links"><a href="https://earthexplorer.usgs.gov/" target="_blank" rel="noopener noreferrer">USGS · CORONA / KH-9 ↗</a><a href="https://www.ancfcc.gov.ma/" target="_blank" rel="noopener noreferrer">ANCFCC · архив аэрофотосъёмки Марокко ↗</a><a id="earth-link" href="https://earth.google.com/web/search/33.67740833,-7.27224444" target="_blank" rel="noopener noreferrer">Google Earth · исторические кадры ↗</a><a href="https://livingatlas.arcgis.com/wayback/" target="_blank" rel="noopener noreferrer">Esri Wayback ↗</a><a href="https://imagery.hotosm.org/" target="_blank" rel="noopener noreferrer">OpenAerialMap ↗</a><a id="copernicus-link" href="https://browser.dataspace.copernicus.eu/?zoom=16&lat=33.67740833&lng=-7.27224444" target="_blank" rel="noopener noreferrer">Copernicus Browser ↗</a></div><p class="fineprint">Снимки загружаются из внешних каталогов при открытии HTML с интернетом. Sentinel загружается порциями: кнопка «Ещё даты Sentinel» догружает архив; снимки всех месяцев показываются после отключения фильтра «лучший кадр месяца». Публичные версии Esri не равны всем датам съёмки, и один исходный кадр может повторяться. Sentinel-2 — среднее разрешение (10 м/пикс.): карта пытается построить вырезку точки из открытого Cloud Optimized GeoTIFF. Это может не сработать из-за ограничений CORS или доступности сервиса. Google Maps можно открыть в отдельной сворачиваемой панели (текущий спутниковый вид без истории). Google Earth не встраивается по условиям Google. NASA GIBS добавляется по выбранным датам (15-е число каждого месяца), кадры могут быть облачными или отсутствовать. Изображения NASA являются региональными обзорами и не показывают отдельные строения стадиона. Пользовательские файлы добавляются локально, без геопривязки, поэтому дата определяется только из имени файла. Функция записи видео требует разрешения браузера на запись вкладки и не гарантирует права на сторонние изображения. USGS, ANCFCC и Google Earth не импортируются автоматически: они могут требовать отдельного поиска, учётной записи или лицензии. Эта страница не подтверждает, что все когда-либо сделанные снимки этой территории найдены.</p></section>
+<section class="sources-section"><h2>Дополнительные исторические архивы</h2><div class="archive-links"><a href="https://earthexplorer.usgs.gov/" target="_blank" rel="noopener noreferrer">USGS · CORONA / KH-9 ↗</a><a href="https://www.ancfcc.gov.ma/" target="_blank" rel="noopener noreferrer">ANCFCC · архив аэрофотосъёмки Марокко ↗</a><a id="earth-link" href="https://earth.google.com/web/search/33.67740833,-7.27224444" target="_blank" rel="noopener noreferrer">Google Earth · исторические кадры ↗</a><a href="https://livingatlas.arcgis.com/wayback/" target="_blank" rel="noopener noreferrer">Esri Wayback ↗</a><a href="https://imagery.hotosm.org/" target="_blank" rel="noopener noreferrer">OpenAerialMap ↗</a><a id="copernicus-link" href="https://browser.dataspace.copernicus.eu/?zoom=16&lat=33.67740833&lng=-7.27224444" target="_blank" rel="noopener noreferrer">Copernicus Browser ↗</a></div><p class="fineprint">Снимки загружаются из внешних каталогов при открытии HTML с интернетом. Sentinel загружается порциями: кнопка «Ещё даты Sentinel» догружает архив; снимки всех месяцев показываются после отключения фильтра «лучший кадр месяца». Публичные версии Esri не равны всем датам съёмки, и один исходный кадр может повторяться. Sentinel-2 — среднее разрешение (10 м/пикс.): карта пытается построить вырезку точки из открытого Cloud Optimized GeoTIFF. Это может не сработать из-за ограничений CORS или доступности сервиса. Google Maps можно открыть в отдельной сворачиваемой панели (текущий спутниковый вид без истории). Google Earth не встраивается по условиям Google. NASA GIBS добавляется по выбранным датам (15-е число каждого месяца), кадры могут быть облачными или отсутствовать. Изображения NASA являются региональными обзорами и не показывают отдельные строения стадиона. Пользовательские файлы добавляются локально, без геопривязки, поэтому дата определяется только из имени файла. Кнопка «Видео WebM» собирает ролик из изображений, доступных для использования в браузере через CORS, без захвата вкладки. Некоторые источники запрещают кэширование/экспорт или технически не позволяют его; такие кадры пропускаются. Кэш хранится только в вашем браузере, может очищаться браузером, не загружается на GitHub и зависит от прав провайдера. USGS, ANCFCC и Google Earth не импортируются автоматически: они могут требовать отдельного поиска, учётной записи или лицензии. Эта страница не подтверждает, что все когда-либо сделанные снимки этой территории найдены.</p></section>
 </main>
 <script type="module">
 const DEFAULT_POS={latitude:33.67740833333333,longitude:-7.27224444444444}; const POS={...DEFAULT_POS},TODAY=new Date().toISOString().slice(0,10);
 const $=s=>document.querySelector(s), dom=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n};
 const timeDate=d=>{if(d===null||d===undefined||d==='')return null;const t=new Date(d);return Number.isNaN(t.getTime())?null:t.toISOString().slice(0,10)};
 const xTile=(lon,z)=>(lon+180)/360*2**z, yTile=(lat,z)=>(1-Math.asinh(Math.tan(lat*Math.PI/180))/Math.PI)/2*2**z;
-let sentinelModulesPromise=null,sentinelImageCache=new Map(), esriRefreshTimer=null,localImages=[],localSerial=0,videoRecorder=null,videoStream=null; let wayback=null, esriAll=[], esriChanges=null, oam=[], sentinel=[], nextSentinel=null, meta=new Map(), selected=null, rows=[], playing=false,timer=null, playbackDelay=1500, zoom=17, cloud=40, year='all', onlyChanges=true, monthly=true, runCount=0, lookupBusy=false, sentinelBusy=false,metadataRunning=false,renderSeq=0,errors=[],sourceStates={esri:'...',oam:'...',sentinel:'...'},sentinelPages=0;
+let sentinelModulesPromise=null,sentinelImageCache=new Map(), esriRefreshTimer=null,localImages=[],localSerial=0,videoRecorder=null,videoStream=null;
+const EXPORT_SIZE={width:960,height:540}, MAX_VIDEO_FRAMES=60, MAX_CACHE_RECORDS=160;
+const frameMemory=new Map(); let frameDBPromise=null, frameWorkBusy=false, cancelFrameWork=false, recordingVideo=false, lastVideoURL=null;
+const waitMs=(ms)=>new Promise(resolve=>setTimeout(resolve,ms));
+const frameKey=(it,w=EXPORT_SIZE.width,h=EXPORT_SIZE.height)=>['frame-v4',it.src,it.id,POS.latitude.toFixed(7),POS.longitude.toFixed(7),zoom,w,h].join('|');
+function cacheStatus(msg){$('#cache-status').textContent=msg;}
+function progressSet(done,total){const p=$('#cache-progress');p.hidden=!(total>0);p.max=total||100;p.value=done||0;}
+function cacheMemorySet(key,blob){frameMemory.delete(key);frameMemory.set(key,blob);if(frameMemory.size>95)frameMemory.delete(frameMemory.keys().next().value);}
+function openFrameDB(){
+ if(frameDBPromise)return frameDBPromise;
+ frameDBPromise=new Promise(resolve=>{
+  if(!window.indexedDB){resolve(null);return}
+  try{
+   const request=indexedDB.open('satellite-timelapse-frames',1);
+   request.onupgradeneeded=()=>{const db=request.result;const store=db.createObjectStore('frames',{keyPath:'key'});store.createIndex('saved','saved')};
+   request.onsuccess=()=>resolve(request.result);
+   request.onerror=()=>resolve(null);
+   request.onblocked=()=>resolve(null);
+  }catch(e){resolve(null)}
+ });
+ return frameDBPromise;
+}
+async function diskFrameGet(key){
+ const db=await openFrameDB();if(!db)return null;
+ return new Promise(resolve=>{try{const req=db.transaction('frames','readonly').objectStore('frames').get(key);req.onsuccess=()=>resolve(req.result?.blob||null);req.onerror=()=>resolve(null)}catch(e){resolve(null)}});
+}
+async function diskFramePut(key,blob,src){
+ // For Esri use only the native HTTP browser cache and an ephemeral in-memory frame.
+ // Do not force offline storage of proprietary map tiles in IndexedDB.
+ if(src==='esri')return;
+ const db=await openFrameDB();if(!db)return;
+ try{await new Promise(resolve=>{const tx=db.transaction('frames','readwrite');tx.objectStore('frames').put({key,blob,saved:Date.now()});tx.oncomplete=resolve;tx.onerror=resolve;tx.onabort=resolve})}catch(e){}
+}
+async function diskFrameClear(){const db=await openFrameDB();if(db){await new Promise(resolve=>{try{const tx=db.transaction('frames','readwrite');tx.objectStore('frames').clear();tx.oncomplete=resolve;tx.onerror=resolve;tx.onabort=resolve}catch(e){resolve()}})}}
+async function pruneDiskCache(){const db=await openFrameDB();if(!db)return;try{
+ await new Promise(resolve=>{const tx=db.transaction('frames','readwrite'),store=tx.objectStore('frames'),keys=[];store.index('saved').openKeyCursor().onsuccess=e=>{const cursor=e.target.result;if(!cursor)return;keys.push(cursor.primaryKey);cursor.continue()};tx.oncomplete=resolve;tx.onerror=resolve});
+ const keys=await new Promise(resolve=>{const tx=db.transaction('frames','readonly'),r=tx.objectStore('frames').index('saved').getAllKeys();r.onsuccess=()=>resolve(r.result||[]);r.onerror=()=>resolve([])});
+ if(keys.length>MAX_CACHE_RECORDS){await new Promise(resolve=>{const tx=db.transaction('frames','readwrite');for(const k of keys.slice(0,keys.length-MAX_CACHE_RECORDS))tx.objectStore('frames').delete(k);tx.oncomplete=resolve;tx.onerror=resolve})}
+ }catch(e){}
+}
+async function cachedFrame(it,w=EXPORT_SIZE.width,h=EXPORT_SIZE.height){const key=frameKey(it,w,h);let blob=frameMemory.get(key);if(!blob)blob=await diskFrameGet(key);if(blob)cacheMemorySet(key,blob);return blob||null;}
+async function storeFrame(it,blob,w=EXPORT_SIZE.width,h=EXPORT_SIZE.height){const key=frameKey(it,w,h);cacheMemorySet(key,blob);await diskFramePut(key,blob,it.src);}
+function loadCorsImage(url,ms=15000){return new Promise((resolve,reject)=>{const img=new Image();img.crossOrigin='anonymous';let done=false;const to=setTimeout(()=>finish(null,new Error('Истёк таймаут загрузки')),ms);function finish(value,error){if(done)return;done=true;clearTimeout(to);img.onload=img.onerror=null;error?reject(error):resolve(value)}img.onload=()=>finish(img);img.onerror=()=>finish(null,new Error('Источник не разрешает загрузку через CORS или недоступен'));img.src=url})}
+function blobFromCanvas(canvas){return new Promise((resolve,reject)=>{try{canvas.toBlob(b=>b?resolve(b):reject(new Error('Изображение нельзя сохранить')),'image/jpeg',0.85)}catch(e){reject(e)}})}
+function drawImageCentered(ctx,img,w,h){const f=Math.min(w/img.width,h/img.height);ctx.drawImage(img,(w-img.width*f)/2,(h-img.height*f)/2,img.width*f,img.height*f)}
+async function rasterFrame(it,w=EXPORT_SIZE.width,h=EXPORT_SIZE.height){
+ const out=document.createElement('canvas');out.width=w;out.height=h;
+ const ctx=out.getContext('2d');ctx.fillStyle='#081b29';ctx.fillRect(0,0,w,h);
+ if(it.src==='local'||it.src==='nasa'){
+  const src=it.src==='local'?it.value.url:nasaImage(it.value.date,w,h);
+  const pic=await loadCorsImage(src);drawImageCentered(ctx,pic,w,h);
+ }else if(it.src==='sentinel'){
+  await sentinelCrop(it,out,{remove(){}},null,{width:w,height:h});
+ }else if(it.src==='esri'||it.src==='oam'){
+  const z=zoom,cx=xTile(POS.longitude,z)*256,cy=yTile(POS.latitude,z)*256;
+  const left=cx-w/2,top=cy-h/2;
+  const minX=Math.floor(left/256),maxX=Math.floor((left+w-1)/256),minY=Math.floor(top/256),maxY=Math.floor((top+h-1)/256);
+  const todo=[];
+  for(let x=minX;x<=maxX;x++)for(let y=minY;y<=maxY;y++){
+   const n=2**z;if(y<0||y>=n)continue;
+   todo.push({url:tileUrl(it,z,((x%n)+n)%n,y),px:x*256-left,py:y*256-top})
+  }
+  // Honor cross-origin security: never use no-cors proxying to evade restrictions.
+  const result=await Promise.all(todo.map(async v=>{try{return {...v,pic:await loadCorsImage(v.url,12000)}}catch(e){return {...v,pic:null}}}));
+  let loaded=0;
+  for(const t of result)if(t.pic){ctx.drawImage(t.pic,t.px,t.py,256,256);loaded++}
+  if(!loaded||loaded/result.length<0.6)throw new Error('Тайлы недоступны для записи (CORS/лицензия/сеть)');
+ }else throw new Error('Неподдерживаемый источник');
+ return blobFromCanvas(out);
+}
+async function getOrRenderFrame(it){let blob=await cachedFrame(it);if(blob)return {blob,cached:true};blob=await rasterFrame(it);await storeFrame(it,blob);return {blob,cached:false};}
+function chosenExportRows(){const candidates=rows.slice();if(candidates.length<=MAX_VIDEO_FRAMES)return candidates;const used=new Set(),result=[];for(let i=0;i<MAX_VIDEO_FRAMES;i++){const ix=Math.round(i*(candidates.length-1)/(MAX_VIDEO_FRAMES-1));if(!used.has(ix)){used.add(ix);result.push(candidates[ix])}}return result}
+async function prepareExportRows(items){
+ let ok=0,failed=0,cacheHits=0;const prepared=[];
+ for(let i=0;i<items.length;i++){
+  if(cancelFrameWork)break;
+  const it=items[i];cacheStatus(`Подготовка ${i+1}/${items.length} · ${dateFor(it).date||'без даты'} · сохранено: ${ok}, недоступно: ${failed}${cacheHits?' · из кэша: '+cacheHits:''}`);
+  try{const result=await getOrRenderFrame(it);prepared.push({it,blob:result.blob});ok++;if(result.cached)cacheHits++}catch(e){failed++;console.warn('Кадр пропущен:',it.src,it.id,e)}
+  progressSet(i+1,items.length);
+  // React to user interaction and avoid freezing mobile browsers.
+  await waitMs(0);
+ }
+ await pruneDiskCache();return {prepared,ok,failed,cacheHits};
+}
+function setFrameBusy(on){frameWorkBusy=on;$('#prepare-frames').disabled=on;$('#clear-frame-cache').disabled=on;$('#record-video').disabled=on;}
+async function beginPreparation(makeVideo=false){
+ if(frameWorkBusy)return;
+ if(!rows.length){cacheStatus('Нет кадров для подготовки. Дождитесь поиска снимков или включите источник NASA.');return}
+ pause();cancelFrameWork=false;setFrameBusy(true);const frames=chosenExportRows();progressSet(0,frames.length);
+ let data;
+ try{
+  data=await prepareExportRows(frames);
+  if(!makeVideo){cacheStatus(`Готово: ${data.ok} кадров · из кэша: ${data.cacheHits} · недоступны: ${data.failed}${rows.length>frames.length?' · выборка '+frames.length+' из '+rows.length:''}. Повторные просмотры не требуют подготовки.`);return}
+  if(data.prepared.length<2){cacheStatus(`Видео не создано: доступны только ${data.prepared.length} кадра. Нужны как минимум два. Остальные ${data.failed} недоступны (CORS/сеть/источник).`);return}
+  cacheStatus(`Подготовлено ${data.prepared.length} кадров (${data.failed} недоступны). Собираем WebM…`);
+  await encodeWebM(data.prepared,data.failed);
+ }catch(e){console.error('Подготовка таймлапса',e);cacheStatus('Ошибка подготовки: '+(e?.message||String(e)))}
+ finally{setFrameBusy(false);progressSet(0,0)}
+}
+async function encodeWebM(frames,skipped){
+ if(typeof MediaRecorder==='undefined'||!HTMLCanvasElement.prototype.captureStream){cacheStatus('Автоматический WebM не поддерживается этим браузером. Кадры сохранены в кэше. Откройте сайт в Chrome.');return}
+ const out=document.createElement('canvas');out.width=EXPORT_SIZE.width;out.height=EXPORT_SIZE.height;
+ const ctx=out.getContext('2d',{alpha:false});
+ const mime=['video/webm;codecs=vp8','video/webm;codecs=vp9','video/webm'].find(t=>MediaRecorder.isTypeSupported(t));
+ if(!mime){cacheStatus('Этот браузер не поддерживает запись WebM. Попробуйте Chrome или Firefox.');return}
+ const stream=out.captureStream(24),pieces=[],recorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:2500000});
+ const done=new Promise((resolve,reject)=>{recorder.ondataavailable=e=>{if(e.data?.size)pieces.push(e.data)};recorder.onstop=resolve;recorder.onerror=e=>reject(e.error||new Error('Ошибка MediaRecorder'))});
+ const delay=Math.max(450,Math.min(2000,playbackDelay));
+ let emitted=0;
+ try{
+  ctx.fillStyle='#091928';ctx.fillRect(0,0,out.width,out.height);
+  recorder.start(500);
+  for(const {it,blob} of frames){
+   const img=await createImageBitmap(blob);
+   ctx.fillStyle='#081826';ctx.fillRect(0,0,out.width,out.height);
+   ctx.drawImage(img,0,0,out.width,out.height);img.close?.();
+   ctx.fillStyle='rgba(4,20,30,.86)';ctx.fillRect(0,out.height-62,out.width,62);
+   ctx.fillStyle='#ffffff';ctx.font='bold 29px system-ui';ctx.fillText(dateFor(it).date||'Без даты',16,out.height-22);
+   ctx.font='16px system-ui';ctx.textAlign='right';ctx.fillText(label(it.src)+' · '+POS.latitude.toFixed(5)+', '+POS.longitude.toFixed(5),out.width-18,out.height-24);ctx.textAlign='left';
+   emitted++;
+   cacheStatus(`Запись видео ${emitted}/${frames.length} · ${dateFor(it).date} · ${Math.round(delay/1000*emitted)} с`);
+   progressSet(emitted,frames.length);
+   await waitMs(delay);
+  }
+  recorder.stop();await done;
+  const video=new Blob(pieces,{type:mime});if(video.size<1000)throw new Error('Видеофайл получился пустым');
+  if(lastVideoURL)URL.revokeObjectURL(lastVideoURL);
+  lastVideoURL=URL.createObjectURL(video);
+  const a=$('#last-video');a.href=lastVideoURL;a.download=`satellite_timelapse_${POS.latitude.toFixed(5)}_${POS.longitude.toFixed(5)}.webm`;a.hidden=false;
+  a.click();cacheStatus(`Видео готово: ${frames.length} кадров · ${(video.size/1048576).toFixed(1)} МБ · ${skipped} недоступных кадров пропущено. Ссылка «Скачать видео» сохранена ниже.`);
+ }finally{if(recorder.state!=='inactive'){recorder.stop();await done.catch(()=>{})}stream.getTracks().forEach(track=>track.stop())}
+}
+ let wayback=null, esriAll=[], esriChanges=null, oam=[], sentinel=[], nextSentinel=null, meta=new Map(), selected=null, rows=[], playing=false,timer=null, playbackDelay=1500, zoom=17, cloud=40, year='all', onlyChanges=true, monthly=true, runCount=0, lookupBusy=false, sentinelBusy=false,metadataRunning=false,renderSeq=0,errors=[],sourceStates={esri:'...',oam:'...',sentinel:'...'},sentinelPages=0;
 const LIMIT_SENTINEL_PAGES=1000;
 function isValidPosition(lat,lon){return Number.isFinite(lat)&&Number.isFinite(lon)&&Math.abs(lat)<=90&&Math.abs(lon)<=180}
 function parseLocation(value){
@@ -158,7 +303,7 @@ function setCompare(open){
   $('#compare-toggle').textContent=open?'✕ Скрыть сравнение':'◈ Карта Google / сравнить';
   if(open){pause();updateGooglePanel();panel.scrollIntoView({behavior:'smooth',block:'nearest'});}else{$('#source-frame').removeAttribute('src');}
 }
-async function sentinelCrop(item, canvas, loading, seq){
+async function sentinelCrop(item, canvas, loading, seq, targetSize=null){
   const asset=item.value.assets?.visual;
   if(!asset?.href || !/^https:\/\//.test(asset.href))throw Error('В сцене нет публичного визуального COG');
   sentinelModulesPromise ||= Promise.all([
@@ -166,7 +311,7 @@ async function sentinelCrop(item, canvas, loading, seq){
     import('https://esm.sh/proj4@2.19.7?bundle')
   ]);
   const [geo,projModule]=await sentinelModulesPromise;
-  if(seq!==renderSeq)return;
+  if(seq!==null&&seq!==renderSeq)return;
   const proj4=projModule.default||projModule;
   const epsg=asset['proj:epsg']||item.value.properties?.['proj:epsg'];
   if(!(epsg>=32601&&epsg<=32660)&&!(epsg>=32701&&epsg<=32760))throw Error('Неподдерживаемая система координат сцены');
@@ -181,9 +326,9 @@ async function sentinelCrop(item, canvas, loading, seq){
     if(sentinelImageCache.size>6)sentinelImageCache.delete(sentinelImageCache.keys().next().value);
     tiff=promise;
   }
-  const geotiff=await tiff, img=await geotiff.getImage();if(seq!==renderSeq)return;
+  const geotiff=await tiff, img=await geotiff.getImage();if(seq!==null&&seq!==renderSeq)return;
   const [minX,minY,maxX,maxY]=img.getBoundingBox();
-  const W=canvas.clientWidth||800,H=canvas.clientHeight||500;
+  const W=targetSize?.width||canvas.clientWidth||800,H=targetSize?.height||canvas.clientHeight||500;
   const metersPerPixel=156543.03392804097*Math.cos(POS.latitude*Math.PI/180)/Math.pow(2,zoom);
   const viewLeft=cx-W*metersPerPixel/2,viewTop=cy+H*metersPerPixel/2;
   const resX=(maxX-minX)/img.getWidth(),resY=(maxY-minY)/img.getHeight();
@@ -195,7 +340,7 @@ async function sentinelCrop(item, canvas, loading, seq){
   const dw=(x1-x0)*resX/metersPerPixel,dh=(y1-y0)*resY/metersPerPixel;
   const sw=Math.min(1200,Math.max(1,Math.round(dw))),sh=Math.min(900,Math.max(1,Math.round(dh)));
   const pixels=await img.readRGB({window:[x0,y0,x1,y1],width:sw,height:sh,interleave:true,resampleMethod:'bilinear'});
-  if(seq!==renderSeq)return;
+  if(seq!==null&&seq!==renderSeq)return;
   const buffer=document.createElement('canvas');buffer.width=sw;buffer.height=sh;
   const ctx=buffer.getContext('2d',{willReadFrequently:false});const idata=ctx.createImageData(sw,sh);
   const channels=Math.round(pixels.length/(sw*sh));
@@ -204,28 +349,58 @@ async function sentinelCrop(item, canvas, loading, seq){
   canvas.width=Math.round(W*devicePixelRatio);canvas.height=Math.round(H*devicePixelRatio);
   const map=canvas.getContext('2d');map.scale(devicePixelRatio,devicePixelRatio);
   map.imageSmoothingEnabled=true;map.drawImage(buffer,dx,dy,dw,dh);
-  loading.remove();$('#crosshair').hidden=false;
+  loading.remove();if(seq!==null)$('#crosshair').hidden=false;
 }
 function renderSentinel(item,canvas,seq){
-  const message=dom('div','loading-photo','Подготавливаем вырезку Sentinel-2 вокруг точки…');canvas.append(message);
+ const message=dom('div','loading-photo','Проверяем кэш кадра Sentinel-2…');canvas.append(message);
+ cachedFrame(item).then(async blob=>{
+  if(seq!==renderSeq)return;
+  if(blob){
+   const image=dom('img','sceneimg');const u=URL.createObjectURL(blob);image.src=u;
+   image.onload=()=>URL.revokeObjectURL(u);image.onerror=()=>URL.revokeObjectURL(u);
+   canvas.replaceChildren(image);message.remove();$('#image-note').textContent='Кадр Sentinel-2 из кэша · 10 м/пикс.';return;
+  }
+  message.textContent='Подготавливаем вырезку Sentinel-2 вокруг точки…';
   const surface=dom('canvas','sceneimg');surface.style.objectFit='fill';canvas.append(surface);
-  const fallback=(error)=>{
-    if(seq!==renderSeq)return;
-    surface.remove();const thumb=sentinelPreview(item);
-    if(thumb){const pic=dom('img','sceneimg');pic.alt='Обзор всей сцены Sentinel-2, не кадр указанной точки';pic.src=thumb;pic.onload=()=>message.remove();pic.onerror=()=>{pic.remove();message.textContent='Растровый просмотр недоступен для этой даты. Откройте первоисточник ↗';};canvas.append(pic)}
-    else message.textContent='Не удалось открыть растр Sentinel-2 в браузере. Откройте сцену в Copernicus Browser ↗';
-    $('#image-note').textContent='Sentinel-2 · 10 м/пикс. Детали стадиона лучше смотреть в Esri/Google Earth.';
-    console.warn('Sentinel raster preview',error);
-  };
-  sentinelCrop(item,surface,message,seq).catch(fallback);
+  try{
+   await sentinelCrop(item,surface,message,seq);
+   if(seq!==renderSeq)return;
+   // Save the processed raster, not only the open TIFF connection.
+   const cached=document.createElement('canvas');cached.width=EXPORT_SIZE.width;cached.height=EXPORT_SIZE.height;
+   cached.getContext('2d').drawImage(surface,0,0,cached.width,cached.height);
+   storeFrame(item,await blobFromCanvas(cached)).catch(e=>console.warn('Cache write',e));
+  }catch(error){
+   if(seq!==renderSeq)return;
+   surface.remove();const thumb=sentinelPreview(item);
+   if(thumb){const pic=dom('img','sceneimg');pic.alt='Обзор всей сцены Sentinel-2, не кадр указанной точки';pic.src=thumb;pic.onload=()=>message.remove();pic.onerror=()=>{pic.remove();message.textContent='Растровый просмотр недоступен для этой даты. Откройте первоисточник ↗';};canvas.append(pic)}
+   else message.textContent='Не удалось открыть растр Sentinel-2 в браузере. Откройте сцену в Copernicus Browser ↗';
+   $('#image-note').textContent='Sentinel-2 · 10 м/пикс. Детали стадиона лучше смотреть в Esri/Google Earth.';
+   console.warn('Sentinel raster preview',error);
+  }
+ }).catch(e=>{if(seq===renderSeq)message.textContent='Не удалось прочитать кэш: '+e.message});
 }
 function frameMini(frame,item){const image=dom('div','frame-preview');if(item.src==='nasa'||item.src==='local'){const pic=dom('img');pic.alt='';pic.loading='lazy';pic.src=item.src==='nasa'?nasaImage(item.value.date,180,90):item.value.url;image.append(pic)}else if(item.src==='sentinel'){const url=sentinelPreview(item);if(url){let pic=dom('img');pic.loading='lazy';pic.src=url;pic.alt='';image.append(pic)}}else{const t=dom('div','tiles');image.append(t);requestAnimationFrame(()=>{if(t.isConnected)mosaic(t,item,16,true)})}frame.append(image)}
 function filmstrip(idx){const film=$('#film'),start=Math.max(0,idx-7),end=Math.min(rows.length,idx+9);film.replaceChildren();if(!rows.length){film.append(dom('span','film-placeholder','Ни одного кадра в выбранных фильтрах. Проверьте сообщения каталога.'));return}if(start>0)film.append(dom('span','film-placeholder',`← ${start} раньше`));for(let i=start;i<end;i++){let item=rows[i],f=dom('button','frame'+(i===idx?' active':''));f.title=`${label(item.src)} · ${dateFor(item).date||'Дата неизвестна'}`;f.setAttribute('aria-label',f.title);frameMini(f,item);let t=dom('div','frame-txt',dateFor(item).date||'Без даты');t.append(dom('small','',label(item.src)));f.append(t);f.onclick=()=>{pause();choose(i)};film.append(f)}if(end<rows.length)film.append(dom('span','film-placeholder',`${rows.length-end} позже →`));film.querySelector('.active')?.scrollIntoView({block:'nearest',inline:'center',behavior:'auto'})}
-function renderPlayer(){const ix=rows.findIndex(v=>v.id===selected),item=ix>=0?rows[ix]:null;$('#counter').textContent=`${item?ix+1:0} / ${rows.length}`;$('#scrub').disabled=!rows.length;$('#scrub').max=String(Math.max(0,rows.length-1));$('#scrub').value=String(Math.max(0,ix));$('#progress-fill').style.width=rows.length>1?`${ix/(rows.length-1)*100}%`:rows.length?'100%':'0%';$('#back').disabled=ix<1;$('#forward').disabled=ix<0||ix===rows.length-1;$('#play').disabled=rows.length<2;$('#range-dates').textContent=rows.length?`${dateFor(rows[0]).date||'?'} → ${dateFor(rows[rows.length-1]).date||'?'}`:'Нет кадров';filmstrip(Math.max(0,ix));const canvas=$('#stage-tiles');const seq=++renderSeq;canvas.replaceChildren();$('#stage-empty').hidden=!!item;$('#crosshair').hidden=!item||['sentinel','local','nasa'].includes(item.src);if(!item){$('#view-date').textContent='—';$('#date-kind').textContent='Нет дат';$('#view-source').textContent='Нет кадров';$('#current-desc').textContent='Кадров в фильтре нет';$('#image-note').textContent='Кадры появятся после загрузки доступных каталогов.';return}const dat=dateFor(item);$('#view-date').textContent=dat.date||'Без даты';$('#date-kind').textContent=dat.kind;$('#view-source').textContent=label(item.src);$('#source-link').href=sourceUrl(item);$('#current-desc').textContent=extraInfo(item);if(item.src==='nasa'||item.src==='local'){
+async function showPreparedFrame(item,seq){
+  // Fast path: previously composed snapshots, tied to the exact coordinates/zoom.
+  const blob=await cachedFrame(item);
+  if(!blob||seq!==renderSeq)return false;
+  const host=$('#stage-tiles');
+  const pic=dom('img','sceneimg');pic.alt='Ранее подготовленный кадр';
+  const url=URL.createObjectURL(blob);pic.src=url;
+  pic.onload=()=>URL.revokeObjectURL(url);pic.onerror=()=>URL.revokeObjectURL(url);
+  host.replaceChildren(pic);$('#image-note').textContent='Кадр загружен из локального кэша · '+label(item.src);
+  return true;
+}
+function renderPlayer(){const ix=rows.findIndex(v=>v.id===selected),item=ix>=0?rows[ix]:null;$('#counter').textContent=`${item?ix+1:0} / ${rows.length}`;$('#scrub').disabled=!rows.length;$('#scrub').max=String(Math.max(0,rows.length-1));$('#scrub').value=String(Math.max(0,ix));$('#progress-fill').style.width=rows.length>1?`${ix/(rows.length-1)*100}%`:rows.length?'100%':'0%';$('#back').disabled=ix<1;$('#forward').disabled=ix<0||ix===rows.length-1;$('#play').disabled=rows.length<2;$('#range-dates').textContent=rows.length?`${dateFor(rows[0]).date||'?'} → ${dateFor(rows[rows.length-1]).date||'?'}`:'Нет кадров';filmstrip(Math.max(0,ix));const canvas=$('#stage-tiles');const seq=++renderSeq;canvas.replaceChildren();$('#stage-empty').hidden=!!item;$('#crosshair').hidden=!item||['sentinel','local','nasa'].includes(item.src);if(!item){$('#view-date').textContent='—';$('#date-kind').textContent='Нет дат';$('#view-source').textContent='Нет кадров';$('#current-desc').textContent='Кадров в фильтре нет';$('#image-note').textContent='Кадры появятся после загрузки доступных каталогов.';return}const dat=dateFor(item);$('#view-date').textContent=dat.date||'Без даты';$('#date-kind').textContent=dat.kind;$('#view-source').textContent=label(item.src);$('#source-link').href=sourceUrl(item);$('#current-desc').textContent=extraInfo(item);
+  const availableInMemory=frameMemory.get(frameKey(item));
+  if(availableInMemory){const img=dom('img','sceneimg');const url=URL.createObjectURL(availableInMemory);img.onload=()=>URL.revokeObjectURL(url);img.onerror=()=>URL.revokeObjectURL(url);img.src=url;canvas.replaceChildren(img);$('#image-note').textContent='Готовый кадр из кэша · '+label(item.src);return;}
+  if(item.src==='nasa'||item.src==='local'){
   const photo=dom('img','sceneimg');photo.alt=item.src==='nasa'?'NASA MODIS: обзор облачности и поверхности на указанную дату':'Пользовательский файл без геопривязки';
   const notice=dom('div','loading-photo','Загружаем изображение…');canvas.append(notice,photo);
+  photo.crossOrigin='anonymous';
   photo.src=item.src==='nasa'?nasaImage(item.value.date,Math.min(1200,Math.round(canvas.clientWidth||1000)),Math.min(800,Math.round(canvas.clientHeight||560))):item.value.url;
-  photo.onload=()=>{if(seq===renderSeq)notice.remove()};
+  photo.onload=async()=>{if(seq!==renderSeq)return;notice.remove();try{const cv=document.createElement('canvas');cv.width=EXPORT_SIZE.width;cv.height=EXPORT_SIZE.height;const cx=cv.getContext('2d');cx.fillStyle='#081826';cx.fillRect(0,0,cv.width,cv.height);drawImageCentered(cx,photo,cv.width,cv.height);await storeFrame(item,await blobFromCanvas(cv))}catch(e){console.warn('Предпросмотр доступен, но CORS не позволяет кэшировать',e)}};
   photo.onerror=()=>{if(seq===renderSeq){photo.remove();notice.textContent=item.src==='nasa'?'NASA не предоставила изображение для этой даты. Откройте NASA Worldview ↗':'Не удалось прочитать локальный файл.'}};
   $('#image-note').textContent=item.src==='nasa'?'NASA MODIS Terra · обзор облаков и местности, примерно 500 м/пикс. · дата запроса, не подтверждённый кадр стадиона.':'Собственный файл · без геопривязки · дата из имени файла.';
 }
@@ -296,27 +471,13 @@ $('#upload-local').onchange=e=>{
 };
 function clearLocal(){localImages.forEach(v=>URL.revokeObjectURL(v.value.url));localImages=[];$('#clear-local').disabled=true;$('#local-status').textContent='Локальные кадры очищены. Импортируйте файлы с датами YYYY-MM-DD в имени.';rebuild();}
 $('#clear-local').onclick=clearLocal;
-$('#record-video').onclick=async()=>{
-  if(videoRecorder&&videoRecorder.state==='recording'){videoRecorder.stop();return}
-  if(!navigator.mediaDevices?.getDisplayMedia||typeof MediaRecorder==='undefined'){
-    status('Этот браузер не поддерживает запись вкладки. Используйте современный Chrome/Edge на компьютере.',true);return
-  }
-  try{
-    if(!$('#source-panel').hidden)setCompare(false);
-    videoStream=await navigator.mediaDevices.getDisplayMedia({video:{displaySurface:'browser'},audio:false});
-    const mime=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'].find(x=>MediaRecorder.isTypeSupported(x));
-    const chunks=[];videoRecorder=new MediaRecorder(videoStream,mime?{mimeType:mime}:{});
-    videoRecorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
-    videoRecorder.onstop=()=>{
-      const file=new Blob(chunks,{type:videoRecorder?.mimeType||'video/webm'}),url=URL.createObjectURL(file),link=dom('a');
-      link.href=url;link.download=`satellite_timelapse_${POS.latitude.toFixed(5)}_${POS.longitude.toFixed(5)}.webm`;link.click();setTimeout(()=>URL.revokeObjectURL(url),30000);
-      videoStream?.getTracks().forEach(t=>t.stop());videoStream=null;videoRecorder=null;
-      $('#record-video').textContent='● Видео';$('#record-video').classList.remove('recording');pause();
-    };
-    videoStream.getVideoTracks()[0].onended=()=>{if(videoRecorder?.state==='recording')videoRecorder.stop()};
-    videoRecorder.start(300);$('#record-video').textContent='■ Завершить';$('#record-video').classList.add('recording');
-    if(rows.length>=2&&!playing)togglePlayback();
-  }catch(err){status('Запись отменена или доступ к вкладке не предоставлен.',true)}
+$('#prepare-frames').onclick=()=>beginPreparation(false);
+$('#record-video').onclick=()=>beginPreparation(true);
+$('#clear-frame-cache').onclick=async()=>{
+ if(frameWorkBusy)return;
+ frameMemory.clear();await diskFrameClear();
+ if(lastVideoURL){URL.revokeObjectURL(lastVideoURL);lastVideoURL=null;$('#last-video').hidden=true}
+ cacheStatus('Кэш очищен. Следующие кадры будут загружены заново.');
 };
 $('#refresh').onclick=reloadAll;
 $('#coordinate-form').onsubmit=e=>{e.preventDefault();const result=parseLocation($('#coordinate-input').value);if(!result){$('#coordinate-help').textContent='Ошибка: введите широту от -90 до 90 и долготу от -180 до 180 в десятичном формате или DMS.';$('#coordinate-help').classList.add('error');return}setLocation(result.lat,result.lon)};
