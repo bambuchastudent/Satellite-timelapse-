@@ -35,6 +35,9 @@ main{padding-top:20px!important;padding-bottom:45px!important}.topline{display:f
 .source-frame-help{padding:10px 14px;border-top:1px solid #365365;color:var(--muted);font-size:12px}
 .source-frame-help a{color:var(--green)}
 @media(max-width:750px){.zoom-pad{right:9px;top:47%}.zoom-pad button{min-width:35px;min-height:35px}.source-frame{height:52vh;min-height:310px}}
+/* Full-viewport imagery must override the 256px slippy-map tile selector.
+   Otherwise cached Sentinel scenes render as one tiny square at top left. */
+.tiles > img.sceneimg{width:100%;height:100%;max-width:none;inset:0;object-fit:cover}
 /* Optional dated weather imagery, user-provided aerial frames and recording */
 .sourceextras{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin:0 0 11px}
 .sourceextras .select-label select{margin:0 0 0 6px}
@@ -66,7 +69,7 @@ main{padding-top:20px!important;padding-bottom:45px!important}.topline{display:f
   <div class="cachebar" aria-label="Подготовка и кэш изображений">
     <button class="smallbutton" id="prepare-frames" title="Сохранить обработанные снимки в памяти этого браузера">⬇ Подготовить кадры</button>
     <button class="smallbutton" id="clear-frame-cache">Очистить кэш</button>
-    <span id="cache-status" role="status" aria-live="polite">Кадры сохраняются по точке, масштабу и дате. Повторная загрузка не требуется, если кэш уже заполнен.</span>
+    <span id="cache-status" role="status" aria-live="polite">Снимки проверяются на полноту покрытия перед кэшированием и экспортом. Неполные кадры пропускаются.</span>
     <progress id="cache-progress" value="0" max="100" hidden></progress>
     <a id="last-video" hidden download="satellite_timelapse.webm">↓ Скачать видео</a>
   </div>
@@ -91,8 +94,12 @@ const xTile=(lon,z)=>(lon+180)/360*2**z, yTile=(lat,z)=>(1-Math.asinh(Math.tan(l
 let sentinelModulesPromise=null,sentinelImageCache=new Map(), esriRefreshTimer=null,localImages=[],localSerial=0,videoRecorder=null,videoStream=null;
 const EXPORT_SIZE={width:960,height:540}, MAX_VIDEO_FRAMES=60, MAX_CACHE_RECORDS=160;
 const frameMemory=new Map(); let frameDBPromise=null, frameWorkBusy=false, cancelFrameWork=false, recordingVideo=false, lastVideoURL=null;
+// The playback clock must wait for the actual photograph, not just the date label.
+let frameReady=Promise.resolve(), finishCurrentFrame=()=>{};
+function beginFrameLoad(){finishCurrentFrame();let resolved=false;frameReady=new Promise(resolve=>{finishCurrentFrame=()=>{if(!resolved){resolved=true;resolve()}}})}
+function finishFrameLoad(seq){if(seq===renderSeq)finishCurrentFrame()}
 const waitMs=(ms)=>new Promise(resolve=>setTimeout(resolve,ms));
-const frameKey=(it,w=EXPORT_SIZE.width,h=EXPORT_SIZE.height)=>['frame-v4',it.src,it.id,POS.latitude.toFixed(7),POS.longitude.toFixed(7),zoom,w,h].join('|');
+const frameKey=(it,w=EXPORT_SIZE.width,h=EXPORT_SIZE.height)=>['frame-v5',it.src,it.id,POS.latitude.toFixed(7),POS.longitude.toFixed(7),zoom,w,h].join('|');
 function cacheStatus(msg){$('#cache-status').textContent=msg;}
 function progressSet(done,total){const p=$('#cache-progress');p.hidden=!(total>0);p.max=total||100;p.value=done||0;}
 function cacheMemorySet(key,blob){frameMemory.delete(key);frameMemory.set(key,blob);if(frameMemory.size>95)frameMemory.delete(frameMemory.keys().next().value);}
@@ -154,32 +161,45 @@ async function rasterFrame(it,w=EXPORT_SIZE.width,h=EXPORT_SIZE.height){
   const result=await Promise.all(todo.map(async v=>{try{return {...v,pic:await loadCorsImage(v.url,12000)}}catch(e){return {...v,pic:null}}}));
   let loaded=0;
   for(const t of result)if(t.pic){ctx.drawImage(t.pic,t.px,t.py,256,256);loaded++}
-  if(!loaded||loaded/result.length<0.6)throw new Error('Тайлы недоступны для записи (CORS/лицензия/сеть)');
+  if(!loaded||loaded/result.length<0.95)throw new Error('Тайлы недоступны для записи (CORS/лицензия/сеть)');
  }else throw new Error('Неподдерживаемый источник');
  return blobFromCanvas(out);
 }
 async function getOrRenderFrame(it){let blob=await cachedFrame(it);if(blob)return {blob,cached:true};blob=await rasterFrame(it);await storeFrame(it,blob);return {blob,cached:false};}
 function chosenExportRows(){const candidates=rows.slice();if(candidates.length<=MAX_VIDEO_FRAMES)return candidates;const used=new Set(),result=[];for(let i=0;i<MAX_VIDEO_FRAMES;i++){const ix=Math.round(i*(candidates.length-1)/(MAX_VIDEO_FRAMES-1));if(!used.has(ix)){used.add(ix);result.push(candidates[ix])}}return result}
 async function prepareExportRows(items){
- let ok=0,failed=0,cacheHits=0;const prepared=[];
- for(let i=0;i<items.length;i++){
-  if(cancelFrameWork)break;
-  const it=items[i];cacheStatus(`Подготовка ${i+1}/${items.length} · ${dateFor(it).date||'без даты'} · сохранено: ${ok}, недоступно: ${failed}${cacheHits?' · из кэша: '+cacheHits:''}`);
-  try{const result=await getOrRenderFrame(it);prepared.push({it,blob:result.blob});ok++;if(result.cached)cacheHits++}catch(e){failed++;console.warn('Кадр пропущен:',it.src,it.id,e)}
-  progressSet(i+1,items.length);
-  // React to user interaction and avoid freezing mobile browsers.
-  await waitMs(0);
+ let ok=0,failed=0,cacheHits=0,finished=0;
+ const prepared=Array(items.length).fill(null), failures={};let next=0;
+ async function worker(){
+  while(next<items.length && !cancelFrameWork){
+   const i=next++,it=items[i];
+   try{
+    if((failures[it.src]||0)>=4)throw new Error('Недоступный источник: предыдущие четыре кадра не загрузились');
+    const result=await getOrRenderFrame(it);
+    prepared[i]={it,blob:result.blob};ok++;if(result.cached)cacheHits++;
+    failures[it.src]=0;
+   }catch(e){failed++;failures[it.src]=(failures[it.src]||0)+1;console.warn('Кадр пропущен:',it.src,it.id,e)}
+   finished++;progressSet(finished,items.length);
+   cacheStatus(`Подготовлено ${finished}/${items.length} · пригодных: ${ok} · из кэша: ${cacheHits} · недоступны: ${failed}`);
+   await waitMs(0);
+  }
  }
- await pruneDiskCache();return {prepared,ok,failed,cacheHits};
+ await Promise.all(Array.from({length:Math.min(3,items.length)},()=>worker()));
+ await pruneDiskCache();return {prepared:prepared.filter(Boolean),ok,failed,cacheHits};
 }
-function setFrameBusy(on){frameWorkBusy=on;$('#prepare-frames').disabled=on;$('#clear-frame-cache').disabled=on;$('#record-video').disabled=on;}
+function setFrameBusy(on){
+ frameWorkBusy=on;$('#prepare-frames').disabled=false;
+ $('#prepare-frames').textContent=on?'✕ Остановить подготовку':'⬇ Подготовить кадры';
+ $('#clear-frame-cache').disabled=on;$('#record-video').disabled=on;
+}
 async function beginPreparation(makeVideo=false){
- if(frameWorkBusy)return;
+ if(frameWorkBusy){cancelFrameWork=true;cacheStatus('Останавливаем подготовку после текущих запросов…');return}
  if(!rows.length){cacheStatus('Нет кадров для подготовки. Дождитесь поиска снимков или включите источник NASA.');return}
  pause();cancelFrameWork=false;setFrameBusy(true);const frames=chosenExportRows();progressSet(0,frames.length);
  let data;
  try{
   data=await prepareExportRows(frames);
+  if(cancelFrameWork){cacheStatus(`Остановлено · подготовлено ${data.ok} кадров, уже загруженные сохранены в кэше.`);return}
   if(!makeVideo){cacheStatus(`Готово: ${data.ok} кадров · из кэша: ${data.cacheHits} · недоступны: ${data.failed}${rows.length>frames.length?' · выборка '+frames.length+' из '+rows.length:''}. Повторные просмотры не требуют подготовки.`);return}
   if(data.prepared.length<2){cacheStatus(`Видео не создано: доступны только ${data.prepared.length} кадра. Нужны как минимум два. Остальные ${data.failed} недоступны (CORS/сеть/источник).`);return}
   cacheStatus(`Подготовлено ${data.prepared.length} кадров (${data.failed} недоступны). Собираем WebM…`);
@@ -201,6 +221,7 @@ async function encodeWebM(frames,skipped){
   ctx.fillStyle='#091928';ctx.fillRect(0,0,out.width,out.height);
   recorder.start(500);
   for(const {it,blob} of frames){
+   if(cancelFrameWork)throw new Error('Создание видео остановлено пользователем');
    const img=await createImageBitmap(blob);
    ctx.fillStyle='#081826';ctx.fillRect(0,0,out.width,out.height);
    ctx.drawImage(img,0,0,out.width,out.height);img.close?.();
@@ -338,12 +359,32 @@ async function sentinelCrop(item, canvas, loading, seq, targetSize=null){
   if(x1<=x0||y1<=y0)throw Error('Выбранная точка вне изображения');
   const dx=(minX+x0*resX-viewLeft)/metersPerPixel,dy=(viewTop-(maxY-y0*resY))/metersPerPixel;
   const dw=(x1-x0)*resX/metersPerPixel,dh=(y1-y0)*resY/metersPerPixel;
+  // A scene may intersect the STAC footprint while its actual COG contains only a corner.
+  // Never stretch such a fragment across the whole map or cache it as a valid frame.
+  const coveredW=Math.max(0,Math.min(W,dx+dw)-Math.max(0,dx));
+  const coveredH=Math.max(0,Math.min(H,dy+dh)-Math.max(0,dy));
+  const geographicCoverage=coveredW*coveredH/(W*H);
+  if(!Number.isFinite(geographicCoverage)||geographicCoverage<0.96)
+    throw Error('Неполное покрытие снимка ('+Math.round(geographicCoverage*100)+'% кадра). Для этой даты изображение пропущено.');
   const sw=Math.min(1200,Math.max(1,Math.round(dw))),sh=Math.min(900,Math.max(1,Math.round(dh)));
   const pixels=await img.readRGB({window:[x0,y0,x1,y1],width:sw,height:sh,interleave:true,resampleMethod:'bilinear'});
   if(seq!==null&&seq!==renderSeq)return;
   const buffer=document.createElement('canvas');buffer.width=sw;buffer.height=sh;
   const ctx=buffer.getContext('2d',{willReadFrequently:false});const idata=ctx.createImageData(sw,sh);
   const channels=Math.round(pixels.length/(sw*sh));
+  if(channels<3 || !Number.isFinite(channels))throw Error('Неверный формат RGB-растра');
+  // Detect black/no-data patches instead of treating them as valid content.
+  // Read the center as well as a grid; a tiny corner of valid pixels is not enough.
+  let valid=0,sampled=0,centerValid=0;
+  for(let iy=0;iy<10;iy++)for(let ix=0;ix<14;ix++){
+    const x=Math.min(sw-1,Math.floor((ix+.5)*sw/14)),y=Math.min(sh-1,Math.floor((iy+.5)*sh/10));
+    const j=(y*sw+x)*channels;
+    const ok=Number(pixels[j])+Number(pixels[j+1])+Number(pixels[j+2])>10;
+    valid+=ok?1:0;sampled++;
+    if(iy>=4&&iy<=5&&ix>=6&&ix<=7)centerValid+=ok?1:0;
+  }
+  if(valid/sampled<0.92||centerValid<3)
+    throw Error('В растре слишком много пустых пикселей ('+Math.round(100*(1-valid/sampled))+'%). Пропускаем кадр без данных.');
   for(let i=0;i<sw*sh;i++){const b=i*4,j=i*channels;idata.data[b]=pixels[j];idata.data[b+1]=pixels[j+1]??pixels[j];idata.data[b+2]=pixels[j+2]??pixels[j];idata.data[b+3]=255;}
   ctx.putImageData(idata,0,0);
   canvas.width=Math.round(W*devicePixelRatio);canvas.height=Math.round(H*devicePixelRatio);
@@ -351,33 +392,31 @@ async function sentinelCrop(item, canvas, loading, seq, targetSize=null){
   map.imageSmoothingEnabled=true;map.drawImage(buffer,dx,dy,dw,dh);
   loading.remove();if(seq!==null)$('#crosshair').hidden=false;
 }
-function renderSentinel(item,canvas,seq){
- const message=dom('div','loading-photo','Проверяем кэш кадра Sentinel-2…');canvas.append(message);
- cachedFrame(item).then(async blob=>{
+function insertCachedImage(blob,canvas,seq,src){
   if(seq!==renderSeq)return;
-  if(blob){
-   const image=dom('img','sceneimg');const u=URL.createObjectURL(blob);image.src=u;
-   image.onload=()=>URL.revokeObjectURL(u);image.onerror=()=>URL.revokeObjectURL(u);
-   canvas.replaceChildren(image);message.remove();$('#image-note').textContent='Кадр Sentinel-2 из кэша · 10 м/пикс.';return;
-  }
-  message.textContent='Подготавливаем вырезку Sentinel-2 вокруг точки…';
-  const surface=dom('canvas','sceneimg');surface.style.objectFit='fill';canvas.append(surface);
-  try{
-   await sentinelCrop(item,surface,message,seq);
-   if(seq!==renderSeq)return;
-   // Save the processed raster, not only the open TIFF connection.
-   const cached=document.createElement('canvas');cached.width=EXPORT_SIZE.width;cached.height=EXPORT_SIZE.height;
-   cached.getContext('2d').drawImage(surface,0,0,cached.width,cached.height);
-   storeFrame(item,await blobFromCanvas(cached)).catch(e=>console.warn('Cache write',e));
-  }catch(error){
-   if(seq!==renderSeq)return;
-   surface.remove();const thumb=sentinelPreview(item);
-   if(thumb){const pic=dom('img','sceneimg');pic.alt='Обзор всей сцены Sentinel-2, не кадр указанной точки';pic.src=thumb;pic.onload=()=>message.remove();pic.onerror=()=>{pic.remove();message.textContent='Растровый просмотр недоступен для этой даты. Откройте первоисточник ↗';};canvas.append(pic)}
-   else message.textContent='Не удалось открыть растр Sentinel-2 в браузере. Откройте сцену в Copernicus Browser ↗';
-   $('#image-note').textContent='Sentinel-2 · 10 м/пикс. Детали стадиона лучше смотреть в Esri/Google Earth.';
-   console.warn('Sentinel raster preview',error);
-  }
- }).catch(e=>{if(seq===renderSeq)message.textContent='Не удалось прочитать кэш: '+e.message});
+  const picture=dom('img','sceneimg');picture.alt='Подготовленный '+label(src)+' · географический центр сохранён';
+  picture.style.objectFit=src==='local'?'contain':'cover';
+  const url=URL.createObjectURL(blob);
+  picture.onload=()=>{URL.revokeObjectURL(url);finishFrameLoad(seq)};
+  picture.onerror=()=>{URL.revokeObjectURL(url);if(seq===renderSeq){canvas.replaceChildren(dom('div','loading-photo','Не удалось показать подготовленный кадр.'));finishFrameLoad(seq)}};
+  canvas.replaceChildren(picture);picture.src=url;
+  $('#image-note').textContent='Проверенный кадр из кэша · '+label(src);
+}
+function renderSentinel(item,canvas,seq){
+  const notice=dom('div','loading-photo','Загружаем геопривязанный кадр Sentinel-2…');canvas.append(notice);
+  // Share the exact same 960×540 rendering path with the video builder.
+  // Never copy an incomplete on-screen canvas into the persistent cache.
+  getOrRenderFrame(item).then(({blob,cached})=>{
+    if(seq!==renderSeq)return;
+    insertCachedImage(blob,canvas,seq,item.src);
+    $('#image-note').textContent=(cached?'Кадр из кэша':'Кадр проверен и сохранён')+' · Sentinel-2 · 10 м/пикс. · общий центр.';
+  }).catch(error=>{
+    if(seq!==renderSeq)return;
+    canvas.replaceChildren(dom('div','loading-photo',
+      'Снимок не покрывает выбранную область целиком или недоступен. Этот кадр не будет включён в видео. Откройте первоисточник ↗'));
+    $('#image-note').textContent='Sentinel-2: '+(error?.message||'нет полноценного изображения')+' · кадр пропущен';
+    finishFrameLoad(seq);console.warn('Sentinel frame rejected',item.id,error);
+  });
 }
 function frameMini(frame,item){const image=dom('div','frame-preview');if(item.src==='nasa'||item.src==='local'){const pic=dom('img');pic.alt='';pic.loading='lazy';pic.src=item.src==='nasa'?nasaImage(item.value.date,180,90):item.value.url;image.append(pic)}else if(item.src==='sentinel'){const url=sentinelPreview(item);if(url){let pic=dom('img');pic.loading='lazy';pic.src=url;pic.alt='';image.append(pic)}}else{const t=dom('div','tiles');image.append(t);requestAnimationFrame(()=>{if(t.isConnected)mosaic(t,item,16,true)})}frame.append(image)}
 function filmstrip(idx){const film=$('#film'),start=Math.max(0,idx-7),end=Math.min(rows.length,idx+9);film.replaceChildren();if(!rows.length){film.append(dom('span','film-placeholder','Ни одного кадра в выбранных фильтрах. Проверьте сообщения каталога.'));return}if(start>0)film.append(dom('span','film-placeholder',`← ${start} раньше`));for(let i=start;i<end;i++){let item=rows[i],f=dom('button','frame'+(i===idx?' active':''));f.title=`${label(item.src)} · ${dateFor(item).date||'Дата неизвестна'}`;f.setAttribute('aria-label',f.title);frameMini(f,item);let t=dom('div','frame-txt',dateFor(item).date||'Без даты');t.append(dom('small','',label(item.src)));f.append(t);f.onclick=()=>{pause();choose(i)};film.append(f)}if(end<rows.length)film.append(dom('span','film-placeholder',`${rows.length-end} позже →`));film.querySelector('.active')?.scrollIntoView({block:'nearest',inline:'center',behavior:'auto'})}
@@ -392,23 +431,23 @@ async function showPreparedFrame(item,seq){
   host.replaceChildren(pic);$('#image-note').textContent='Кадр загружен из локального кэша · '+label(item.src);
   return true;
 }
-function renderPlayer(){const ix=rows.findIndex(v=>v.id===selected),item=ix>=0?rows[ix]:null;$('#counter').textContent=`${item?ix+1:0} / ${rows.length}`;$('#scrub').disabled=!rows.length;$('#scrub').max=String(Math.max(0,rows.length-1));$('#scrub').value=String(Math.max(0,ix));$('#progress-fill').style.width=rows.length>1?`${ix/(rows.length-1)*100}%`:rows.length?'100%':'0%';$('#back').disabled=ix<1;$('#forward').disabled=ix<0||ix===rows.length-1;$('#play').disabled=rows.length<2;$('#range-dates').textContent=rows.length?`${dateFor(rows[0]).date||'?'} → ${dateFor(rows[rows.length-1]).date||'?'}`:'Нет кадров';filmstrip(Math.max(0,ix));const canvas=$('#stage-tiles');const seq=++renderSeq;canvas.replaceChildren();$('#stage-empty').hidden=!!item;$('#crosshair').hidden=!item||['sentinel','local','nasa'].includes(item.src);if(!item){$('#view-date').textContent='—';$('#date-kind').textContent='Нет дат';$('#view-source').textContent='Нет кадров';$('#current-desc').textContent='Кадров в фильтре нет';$('#image-note').textContent='Кадры появятся после загрузки доступных каталогов.';return}const dat=dateFor(item);$('#view-date').textContent=dat.date||'Без даты';$('#date-kind').textContent=dat.kind;$('#view-source').textContent=label(item.src);$('#source-link').href=sourceUrl(item);$('#current-desc').textContent=extraInfo(item);
+function renderPlayer(){const ix=rows.findIndex(v=>v.id===selected),item=ix>=0?rows[ix]:null;$('#counter').textContent=`${item?ix+1:0} / ${rows.length}`;$('#scrub').disabled=!rows.length;$('#scrub').max=String(Math.max(0,rows.length-1));$('#scrub').value=String(Math.max(0,ix));$('#progress-fill').style.width=rows.length>1?`${ix/(rows.length-1)*100}%`:rows.length?'100%':'0%';$('#back').disabled=ix<1;$('#forward').disabled=ix<0||ix===rows.length-1;$('#play').disabled=rows.length<2;$('#range-dates').textContent=rows.length?`${dateFor(rows[0]).date||'?'} → ${dateFor(rows[rows.length-1]).date||'?'}`:'Нет кадров';filmstrip(Math.max(0,ix));const canvas=$('#stage-tiles');const seq=++renderSeq;beginFrameLoad();canvas.replaceChildren();$('#stage-empty').hidden=!!item;$('#crosshair').hidden=!item||['sentinel','local','nasa'].includes(item.src);if(!item){$('#view-date').textContent='—';$('#date-kind').textContent='Нет дат';$('#view-source').textContent='Нет кадров';$('#current-desc').textContent='Кадров в фильтре нет';$('#image-note').textContent='Кадры появятся после загрузки доступных каталогов.';finishFrameLoad(seq);return}const dat=dateFor(item);$('#view-date').textContent=dat.date||'Без даты';$('#date-kind').textContent=dat.kind;$('#view-source').textContent=label(item.src);$('#source-link').href=sourceUrl(item);$('#current-desc').textContent=extraInfo(item);
   const availableInMemory=frameMemory.get(frameKey(item));
-  if(availableInMemory){const img=dom('img','sceneimg');const url=URL.createObjectURL(availableInMemory);img.onload=()=>URL.revokeObjectURL(url);img.onerror=()=>URL.revokeObjectURL(url);img.src=url;canvas.replaceChildren(img);$('#image-note').textContent='Готовый кадр из кэша · '+label(item.src);return;}
+  if(availableInMemory){insertCachedImage(availableInMemory,canvas,seq,item.src);return;}
   if(item.src==='nasa'||item.src==='local'){
   const photo=dom('img','sceneimg');photo.alt=item.src==='nasa'?'NASA MODIS: обзор облачности и поверхности на указанную дату':'Пользовательский файл без геопривязки';
   const notice=dom('div','loading-photo','Загружаем изображение…');canvas.append(notice,photo);
   photo.crossOrigin='anonymous';
   photo.src=item.src==='nasa'?nasaImage(item.value.date,Math.min(1200,Math.round(canvas.clientWidth||1000)),Math.min(800,Math.round(canvas.clientHeight||560))):item.value.url;
-  photo.onload=async()=>{if(seq!==renderSeq)return;notice.remove();try{const cv=document.createElement('canvas');cv.width=EXPORT_SIZE.width;cv.height=EXPORT_SIZE.height;const cx=cv.getContext('2d');cx.fillStyle='#081826';cx.fillRect(0,0,cv.width,cv.height);drawImageCentered(cx,photo,cv.width,cv.height);await storeFrame(item,await blobFromCanvas(cv))}catch(e){console.warn('Предпросмотр доступен, но CORS не позволяет кэшировать',e)}};
-  photo.onerror=()=>{if(seq===renderSeq){photo.remove();notice.textContent=item.src==='nasa'?'NASA не предоставила изображение для этой даты. Откройте NASA Worldview ↗':'Не удалось прочитать локальный файл.'}};
+  photo.onload=async()=>{if(seq!==renderSeq)return;notice.remove();finishFrameLoad(seq);try{const cv=document.createElement('canvas');cv.width=EXPORT_SIZE.width;cv.height=EXPORT_SIZE.height;const cx=cv.getContext('2d');cx.fillStyle='#081826';cx.fillRect(0,0,cv.width,cv.height);drawImageCentered(cx,photo,cv.width,cv.height);await storeFrame(item,await blobFromCanvas(cv))}catch(e){console.warn('Предпросмотр доступен, но CORS не позволяет кэшировать',e)}};
+  photo.onerror=()=>{if(seq===renderSeq){photo.remove();notice.textContent=item.src==='nasa'?'NASA не предоставила изображение для этой даты. Откройте NASA Worldview ↗':'Не удалось прочитать локальный файл.';finishFrameLoad(seq)}};
   $('#image-note').textContent=item.src==='nasa'?'NASA MODIS Terra · обзор облаков и местности, примерно 500 м/пикс. · дата запроса, не подтверждённый кадр стадиона.':'Собственный файл · без геопривязки · дата из имени файла.';
 }
 else if(item.src==='sentinel'){
   renderSentinel(item,canvas,seq);
   $('#image-note').textContent='Sentinel-2 · 10 м/пикс. · вырезка выбранной точки, а не вся спутниковая сцена.';
 }
-else{const placeholder=dom('div','loading-photo','Загрузка карты…');canvas.append(placeholder);const tileLayer=dom('div','tiles');canvas.append(tileLayer);requestAnimationFrame(()=>{if(seq!==renderSeq)return;let total=0,done=0;const z=zoom;total=mosaic(tileLayer,item,z);tileLayer.querySelectorAll('img').forEach(pic=>{const mark=()=>{done++;if(done>=1&&seq===renderSeq&&placeholder.isConnected)placeholder.remove()};pic.onload=mark;pic.onerror=mark});if(!total)placeholder.textContent='Нет тайлов'});$('#image-note').textContent=item.src==='esri'?(dat.actual?'Детальный снимок, координаты строго по центру':'Версия карты. Дата оригинальной съёмки пока не подтверждена.'):'Аэрофото или спутниковый снимок из открытого каталога, центрирован по координатам.'}}
+else{const placeholder=dom('div','loading-photo','Загрузка карты…');canvas.append(placeholder);const tileLayer=dom('div','tiles');canvas.append(tileLayer);requestAnimationFrame(()=>{if(seq!==renderSeq)return;let total=0,done=0;const z=zoom;total=mosaic(tileLayer,item,z);tileLayer.querySelectorAll('img').forEach(pic=>{const mark=()=>{if(seq!==renderSeq)return;done++;if(placeholder.isConnected)placeholder.remove();if(done>=total)finishFrameLoad(seq)};pic.onload=mark;pic.onerror=mark});if(!total){placeholder.textContent='Нет тайлов';finishFrameLoad(seq)}});$('#image-note').textContent=item.src==='esri'?(dat.actual?'Детальный снимок, координаты строго по центру':'Версия карты. Дата оригинальной съёмки пока не подтверждена.'):'Аэрофото или спутниковый снимок из открытого каталога, центрирован по координатам.'}}
 function extraInfo(item){if(item.src==='nasa')return 'NASA GIBS · MODIS Terra (облака и поверхность, обзор ~400 км, дата запроса)';if(item.src==='local')return `Локальный файл · ${item.value.name} · без геопривязки`;const m=item.src==='esri'?meta.get(item.value.releaseNum):item.value.properties||{};if(item.src==='esri')return `${m?.provider||'Поставщик не указан'}${m?.resolution?' · '+m.resolution+' м/пикс.':''}`;if(item.src==='oam')return `${m?.['oam:platform_type']||'аэросъёмка'} · ${m?.gsd||'?'} м/пикс. · ${m?.['oam:producer_name']||'OAM'}`;return `Облачность ${Math.round(m?.['eo:cloud_cover']??0)}% · 10 м/пикс. · обзор сцены`}
 function choose(ix){if(!rows.length)return;selected=rows[Math.max(0,Math.min(ix,rows.length-1))].id;renderPlayer()}
 const MIN_ZOOM=12,MAX_ZOOM=20;
@@ -425,7 +464,7 @@ function setZoom(z){
   },550);
 }
 function pause(){playing=false;clearTimeout(timer);timer=null;$('#play').textContent='▶ Запустить';$('#play').setAttribute('aria-pressed','false')}
-function tick(){if(!playing)return;let idx=rows.findIndex(i=>i.id===selected);if(idx<rows.length-1)choose(idx+1);else if($('#loop').checked)choose(0);else{pause();return}timer=setTimeout(tick,playbackDelay)}
+async function tick(){if(!playing)return;const ready=frameReady;await Promise.race([ready,waitMs(12000)]);if(!playing)return;let idx=rows.findIndex(i=>i.id===selected);if(idx<rows.length-1)choose(idx+1);else if($('#loop').checked)choose(0);else{pause();return}timer=setTimeout(tick,playbackDelay)}
 function togglePlayback(){if(playing){pause();return}if(rows.length<2)return;if(rows.findIndex(r=>r.id===selected)>=rows.length-1)choose(0);playing=true;$('#play').textContent='⏸ Пауза';$('#play').setAttribute('aria-pressed','true');timer=setTimeout(tick,playbackDelay)}
 function geometryRing(lon,lat,ring){let isIn=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){let [xi,yi]=ring[i],[xj,yj]=ring[j];if(((yi>lat)!==(yj>lat))&&lon<(xj-xi)*(lat-yi)/(yj-yi)+xi)isIn=!isIn}return isIn}
 function pointInside(g){if(!g)return false;let polygons=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];return polygons.some(p=>p.length&&geometryRing(POS.longitude,POS.latitude,p[0])&&!p.slice(1).some(r=>geometryRing(POS.longitude,POS.latitude,r)))}
@@ -471,7 +510,7 @@ $('#upload-local').onchange=e=>{
 };
 function clearLocal(){localImages.forEach(v=>URL.revokeObjectURL(v.value.url));localImages=[];$('#clear-local').disabled=true;$('#local-status').textContent='Локальные кадры очищены. Импортируйте файлы с датами YYYY-MM-DD в имени.';rebuild();}
 $('#clear-local').onclick=clearLocal;
-$('#prepare-frames').onclick=()=>beginPreparation(false);
+$('#prepare-frames').onclick=()=>{if(frameWorkBusy){cancelFrameWork=true;cacheStatus('Останавливаем обработку…')}else beginPreparation(false)};
 $('#record-video').onclick=()=>beginPreparation(true);
 $('#clear-frame-cache').onclick=async()=>{
  if(frameWorkBusy)return;
