@@ -28,8 +28,12 @@ async def main():
   browser=await pw.chromium.launch(args=['--no-sandbox'])
   ctx=await browser.new_context(locale='es-ES',timezone_id='Europe/Madrid',viewport={'width':1400,'height':1000})
   page=await ctx.new_page()
-  await page.goto(URL,wait_until='domcontentloaded',timeout=60000)
+  response=await page.goto(URL,wait_until='domcontentloaded',timeout=60000)
+  print('Retail HTTP',response.status if response else '?','URL',page.url,flush=True)
   await page.wait_for_timeout(4000)
+  print('Retail title',await page.title(),flush=True)
+  print('Retail body',repr((await page.locator('body').inner_text())[:700]),flush=True)
+  print('Anchor sample',await page.eval_on_selector_all('a','els=>els.slice(0,8).map(x=>({text:x.innerText.slice(0,25),href:x.href}))'),flush=True)
   for item in await extract(page):found[item['url']]=item
   for i in range(2,32):
    moved=False
