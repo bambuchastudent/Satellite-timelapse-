@@ -17,7 +17,7 @@ const setup=htmlJS('setup.html');
 const bookmarklet=fs.readFileSync(path.join(dir,'bookmarklet.txt'),'utf8').trim();
 assert(bookmarklet.startsWith('javascript:'),'Missing bookmarklet protocol');
 new Function(bookmarklet.slice('javascript:'.length));
-assert(bookmarklet.includes('carrefour.es'),'Collector host check missing');
+assert(bookmarklet.includes('carrefour\\.es'),'Collector host check missing');
 assert(!bookmarklet.includes('document.cookie'),'Collector must not copy session cookies');
 
 const body=importer.slice(importer.indexOf('function valid(s){'),importer.indexOf('function render(){'));
