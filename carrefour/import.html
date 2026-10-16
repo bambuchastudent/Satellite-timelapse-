@@ -8,28 +8,33 @@
 const $=x=>document.getElementById(x);
 const LOCAL='cf50-captured-v1', PENDING='cf50-unsynced-v1', TOKEN='cf50-gh-token-v1';
 const GH='https://api.github.com/repos/bambuchastudent/Satellite-timelapse-/contents/carrefour/community.json';
-let records=[],dirty=new Set(),token=sessionStorage.getItem(TOKEN)||'',syncing=false;
+let records=[],dirty=new Set(),token=sessionStorage.getItem(TOKEN)||'',syncing=false,needsSync=false;
 function read(k,other){try{return JSON.parse(localStorage.getItem(k))||other}catch(e){return other}}
 function write(k,v){localStorage.setItem(k,JSON.stringify(v))}
 function valid(s){s=String(s||'');if(!/^\d{13}$/.test(s))return '';let t=0;for(let i=0;i<12;i++)t+=Number(s[i])*(i%2?3:1);return (10-t%10)%10===Number(s[12])?s:''}
 function sanitize(raw){if(!raw||typeof raw!=='object')return null;const name=String(raw.name||'').trim().slice(0,250);if(name.length<4)return null;let url='';try{let u=new URL(String(raw.url||''));if(!/(^|\.)carrefour\.es$/i.test(u.hostname)||!u.pathname.startsWith('/supermercado/'))return null;url=u.origin+u.pathname}catch(e){return null}
 const code=url.match(/\/(R-[^/]+)\/p\/?$/i);let n=raw.price===null||raw.price===undefined?null:Number(raw.price);if(n!==null&&(!Number.isFinite(n)||n<=.04||n>999))n=null;
 const state=raw.state==='promo_page'?'promo_page':'unknown',obs=new Date(raw.observedAt||Date.now());return{id:code?code[1]:url,name,url,ean:valid(raw.ean),price:n,state,observedAt:Number.isFinite(obs.getTime())?obs.toISOString():new Date().toISOString()}}
-function combine(a,b){let m=new Map();for(let r of [...a,...b]){let p=sanitize(r);if(!p)continue;let old=m.get(p.id);if(old){p={...old,...p,ean:p.ean||old.ean||'',price:p.price===null?old.price:p.price,state:old.state==='promo_page'?'promo_page':p.state,observedAt:p.observedAt>old.observedAt?p.observedAt:old.observedAt}}m.set(p.id,p)}return Array.from(m.values()).slice(-2500).sort((x,y)=>x.id.localeCompare(y.id))}
+function combine(a,b){let m=new Map();for(let raw of [...a,...b]){let p=sanitize(raw);if(!p)continue;let old=m.get(p.id);if(old){let fresh=p.observedAt>=old.observedAt,primary=fresh?p:old,backup=fresh?old:p;p={...backup,...primary,ean:primary.ean||backup.ean||'',price:primary.price===null?backup.price:primary.price,state:(old.state==='promo_page'||p.state==='promo_page')?'promo_page':'unknown',observedAt:old.observedAt>p.observedAt?old.observedAt:p.observedAt}}m.set(p.id,p)}return Array.from(m.values()).slice(-2500).sort((x,y)=>x.id.localeCompare(y.id))}
 function render(){ $('count').textContent=String(records.length);$('pending').textContent=String(dirty.size);$('list').replaceChildren();for(let x of records.slice(-18).reverse()){const li=document.createElement('li');li.textContent=(x.ean?x.ean+' · ':'')+x.name+(x.price!==null?' · '+x.price.toFixed(2)+' €':' · без цены')+(x.state==='promo_page'?' · каталог акции':' · участие не подтверждено');$('list').append(li)}}
 function ingest(p){if(!p||p.origin!=='carrefour-browser'||!Array.isArray(p.products))return;let v=p.products.slice(0,150).map(sanitize).filter(Boolean);if(!v.length){$('status').textContent='Товары не распознаны: проверь, что открыт каталог Carrefour.';return}let prev=records;records=combine(records,v);v.forEach(x=>dirty.add(x.id));write(LOCAL,records);write(PENDING,[...dirty]);render();$('status').textContent='Принято '+v.length+' товаров. Уникальных: '+records.length+'.';if(token)sync()}
 function decode(hash){if(!hash.startsWith('#import='))return;try{let src=hash.slice(8).replace(/-/g,'+').replace(/_/g,'/');let bytes=Uint8Array.from(atob(src),x=>x.charCodeAt(0));ingest(JSON.parse(new TextDecoder().decode(bytes)));history.replaceState(null,'',location.pathname)}catch(e){$('status').textContent='Ошибка приёма: '+e.message}}
 function txtToBase(s){const a=new TextEncoder().encode(s);let str='';for(let i=0;i<a.length;i+=16384)str+=String.fromCharCode(...a.subarray(i,i+16384));return btoa(str)}
 function baseToTxt(s){const a=Uint8Array.from(atob(s.replace(/\s/g,'')),c=>c.charCodeAt(0));return new TextDecoder().decode(a)}
 async function api(method,url,body){const res=await fetch(url,{method,headers:{'Accept':'application/vnd.github+json','Content-Type':'application/json','Authorization':'Bearer '+token,'X-GitHub-Api-Version':'2022-11-28'},body:body?JSON.stringify(body):undefined,cache:'no-store'});if(!res.ok){let msg=await res.text();const error=new Error('GitHub '+res.status+': '+msg.slice(0,260));error.status=res.status;throw error}return res.json()}
-async function sync(){if(!token){$('syncStatus').textContent='Сначала создай ограниченный GitHub PAT и введи его здесь.';return}if(syncing)return;syncing=true;$('syncStatus').textContent='Синхронизация с GitHub…';
+async function sync(){if(!token){$('syncStatus').textContent='Сначала создай ограниченный GitHub PAT и введи его здесь.';return}if(syncing){needsSync=true;return}syncing=true;needsSync=false;$('syncStatus').textContent='Синхронизация с GitHub…';let completed=false;
+const snapshot=records.map(x=>({...x})),sentIds=new Set(dirty);
 try{for(let attempt=0;attempt<3;attempt++){
 let remote=[],sha;
-try{let current=await api('GET',GH+'?ref=develop&t='+Date.now());sha=current.sha;const doc=JSON.parse(baseToTxt(current.content));remote=Array.isArray(doc.products)?doc.products:[]}catch(e){if(e.status!==404)throw e}
-let all=combine(remote,records),clean=a=>a.map(x=>JSON.stringify(x)).join('\n');
-if(clean(all)===clean(combine(remote,[]))){dirty.clear();write(PENDING,[]);$('syncStatus').textContent='Данные уже в GitHub. '+all.length+' записей.';break}
-try{await api('PUT',GH,{message:'data(carrefour): sync browser-observed product cache',content:txtToBase(JSON.stringify({version:1,updatedAt:new Date().toISOString(),products:all},null,2)+'\n'),sha,branch:'develop'});dirty.clear();write(PENDING,[]);$('syncStatus').textContent='Отправлено в общий GitHub-кэш: '+all.length+' товаров. GitHub Pages обновится после публикации.';break}catch(e){if((e.status===409||e.status===422)&&attempt<2)continue;throw e}
-}}catch(e){$('syncStatus').textContent='Не отправлено, локальные данные сохранены. '+e.message}finally{syncing=false;render()}}
+try{let current=await api('GET',GH+'?ref=develop&t='+Date.now());sha=current.sha;let doc=JSON.parse(baseToTxt(current.content));remote=Array.isArray(doc.products)?doc.products:[]}catch(e){if(e.status!==404)throw e}
+let all=combine(remote,snapshot),prev=combine(remote,[]);
+if(JSON.stringify(all)===JSON.stringify(prev)){$('syncStatus').textContent='Данные уже есть в GitHub: '+all.length+' товаров.';completed=true;break}
+try{await api('PUT',GH,{message:'data(carrefour): sync browser-observed product cache',content:txtToBase(JSON.stringify({version:1,updatedAt:new Date().toISOString(),products:all},null,2)+'\n'),sha,branch:'develop'});$('syncStatus').textContent='Сохранено в общем GitHub-кэше: '+all.length+' товаров. Страница обновится после публикации.';completed=true;break}catch(e){if((e.status===409||e.status===422)&&attempt<2)continue;throw e}
+}
+if(completed){for(let id of sentIds)dirty.delete(id);write(PENDING,[...dirty])}
+}catch(e){$('syncStatus').textContent='Ошибка отправки: '+e.message+'. Локальные данные сохранены.'}
+finally{syncing=false;render();if(completed&&token&&(needsSync||dirty.size)) {needsSync=false;setTimeout(sync,1500)}}
+}
 $('connect').onclick=()=>{const v=$('token').value.trim();if(!v){$('syncStatus').textContent='Введи токен только для этого репозитория.';return}token=v;sessionStorage.setItem(TOKEN,token);$('token').value='';$('syncStatus').textContent='Токен сохранён до закрытия вкладки. Синхронизация включена.';sync()};
 $('forget').onclick=()=>{token='';sessionStorage.removeItem(TOKEN);$('token').value='';$('syncStatus').textContent='Токен забыт.'};
 $('sync').onclick=sync;
