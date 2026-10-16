@@ -1,0 +1,104 @@
+{
+  "campaign": "Carrefour 50% Que Vuelve",
+  "updatedAt": "2026-10-16T19:20:00+02:00",
+  "reportedTotal": 729,
+  "note": "Начальный частичный кэш: не все 729 товаров индексированы. Цены онлайн; El Saler может отличаться.",
+  "products": [
+    {
+      "id": "fairy49",
+      "ean": "8006530212229",
+      "name": "Fairy Original All in One Limón, 49 cápsulas",
+      "price": 15.75,
+      "category": "Бытовая химия",
+      "url": "https://www.carrefour.es/supermercado/lavavajilla-a-maquina-en-capsula-original-limon-fairy-49-ud/R-VC4AECOMM-725955/p"
+    },
+    {
+      "id": "finish50",
+      "ean": "8410104124632",
+      "name": "Finish All in 1 Gel Brillo y Protección, 50 lavados",
+      "price": 10.99,
+      "category": "Бытовая химия",
+      "url": "https://www.carrefour.es/supermercado/gel-para-lavavajillas-brillo-y-proteccion-finish-50-lavados/R-835176071/p"
+    },
+    {
+      "id": "somat50",
+      "ean": "8410436396479",
+      "name": "Somat Excellence Duo Gel Frescor Anti-Olor, 800 ml, 50 lavados",
+      "price": 8.03,
+      "category": "Бытовая химия",
+      "url": "https://www.carrefour.es/supermercado/gel-para-lavavajillas-frescor-anti-olor-excellence-duo-gel-somat-50-lavados/R-719204061/p"
+    },
+    {
+      "id": "nutella",
+      "ean": "",
+      "name": "Nutella crema cacao avellanas, 1 kg",
+      "price": 8.49,
+      "category": "Продукты",
+      "url": ""
+    },
+    {
+      "id": "cocacola0",
+      "ean": "",
+      "name": "Coca-Cola Zero mini pack 10 × 20 cl",
+      "price": 6.95,
+      "category": "Напитки",
+      "url": ""
+    },
+    {
+      "id": "cocacola1",
+      "ean": "",
+      "name": "Coca-Cola original mini pack 10 × 20 cl",
+      "price": 6.95,
+      "category": "Напитки",
+      "url": ""
+    },
+    {
+      "id": "cocacola2",
+      "ean": "",
+      "name": "Coca-Cola Zero sin cafeína mini pack 10 × 20 cl",
+      "price": 6.95,
+      "category": "Напитки",
+      "url": ""
+    },
+    {
+      "id": "pizza0",
+      "ean": "",
+      "name": "Pizza Barbacoa Ristorante Dr. Oetker 340 g",
+      "price": 3.85,
+      "category": "Заморозка",
+      "url": ""
+    },
+    {
+      "id": "pizza1",
+      "ean": "",
+      "name": "Pizza Prosciutto Ristorante Dr. Oetker 340 g",
+      "price": 3.85,
+      "category": "Заморозка",
+      "url": ""
+    },
+    {
+      "id": "pizza2",
+      "ean": "",
+      "name": "Pizza Quattro Formaggi Ristorante Dr. Oetker 340 g",
+      "price": 3.85,
+      "category": "Заморозка",
+      "url": ""
+    },
+    {
+      "id": "nestle",
+      "ean": "",
+      "name": "Chocolate con leche extrafino Nestlé 3 × 125 g",
+      "price": 4.39,
+      "category": "Продукты",
+      "url": ""
+    },
+    {
+      "id": "dodot",
+      "ean": "",
+      "name": "Toallitas Pure Aqua Dodot 144 ud",
+      "price": 9.99,
+      "category": "Гигиена",
+      "url": ""
+    }
+  ]
+}
