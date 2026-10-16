@@ -1,0 +1,58 @@
+javascript:(function(){
+'use strict';
+if(!/(^|\.)carrefour\.es$/i.test(location.hostname)){alert('Открой страницу Carrefour.es и повтори запуск.');return}
+if(window.__cfSatelliteCollector){window.__cfSatelliteCollector.run();return}
+var DEST='https://bambuchastudent.github.io/Satellite-timelapse-/carrefour/import.html', TARGET='cfSatelliteImport';
+var receiver=null,seen=new Map(),last=-1,ready=false,clock=0;
+function ean(x){x=String(x||'');if(!/^\d{13}$/.test(x))return '';var s=0;for(var i=0;i<12;i++)s+=Number(x[i])*(i%2?3:1);return (10-s%10)%10==Number(x[12])?x:''}
+function clean(s){return String(s||'').replace(/\s+/g,' ').trim().slice(0,250)}
+function price(s){if(!s)return null;var m=String(s).match(/(\d{1,3}(?:\.\d{3})*,\d{2})\s*€|€\s*(\d{1,3}(?:\.\d{3})*,\d{2})/);if(!m)return null;var v=Number((m[1]||m[2]).replace(/\./g,'').replace(',','.'));return v>.04&&v<999?v:null}
+function id(url){var m=url.match(/\/(R-[^/]+)\/p(?:\/|$)/i);return m?m[1]:url}
+function link(raw){try{var u=new URL(raw,location.href);if(!/(^|\.)carrefour\.es$/i.test(u.hostname))return '';if(!/^\/supermercado\//.test(u.pathname))return '';return u.origin+u.pathname}catch(e){return ''}}
+function card(a){
+ var url=link(a.href);if(!url||!/\/p\/?$/.test(new URL(url).pathname))return null;
+ var root=a;for(var k=0;k<5&&root.parentElement;k++){
+ var par=root.parentElement,t=clean(par.innerText||par.textContent||'');
+ if(t.length>750)break;root=par;if(t.length>20&&price(t)!==null)break}
+ var name=clean(a.getAttribute('aria-label')||a.querySelector('img[alt]')?.getAttribute('alt')||a.querySelector('h3,h2')?.innerText||a.innerText||root.querySelector('h3,h2')?.innerText||'');
+ if(name.length<6||name.length>200)return null;
+ var p=price(root.innerText||root.textContent);
+ var gtin=ean(a.getAttribute('data-ean')||root.getAttribute('data-gtin')||root.getAttribute('data-ean'));
+ if(!gtin){var m=(root.innerText||'').match(/\b(?:EAN|GTIN)(?:-13)?\s*:?\s*(\d{13})\b/i);if(m)gtin=ean(m[1])}
+ return {id:id(url),name:name,url:url,price:p,ean:gtin}
+}
+function productJson(){
+ var out=[];document.querySelectorAll('script[type="application/ld+json"]').forEach(function(s){
+ try{var obj=JSON.parse(s.textContent);var q=[obj],iter=0;
+ while(q.length&&iter++<150){var x=q.shift();if(!x||typeof x!=='object')continue;
+ if(Array.isArray(x)){q.push.apply(q,x.slice(0,35));continue}
+ if(x['@type']==='Product'||Array.isArray(x['@type'])&&x['@type'].includes('Product')){
+ var u=link(typeof x.url==='string'?x.url:location.href),offers=Array.isArray(x.offers)?x.offers[0]:x.offers||{};
+ if(u){var num=Number(offers.price),p=num>.04&&num<999?num:price(String(offers.price||''));out.push({id:id(u),name:clean(x.name),url:u,price:p,ean:ean(x.gtin13||x.gtin||x.ean)})}}
+ for(var key of ['@graph','mainEntity','itemListElement','item','product'])if(x[key])q.push(x[key])
+ }}catch(e){}
+ });return out}
+function extract(){
+ var result=new Map(),page=location.origin+location.pathname;
+ var promo=/ofertas50qvoctubre26/i.test(location.pathname);
+ document.querySelectorAll('a[href*="/supermercado/"][href*="/p"]').forEach(function(a){var p=card(a);if(p)result.set(p.id,p)});
+ productJson().forEach(function(p){if(!p.name)return;var old=result.get(p.id)||{};result.set(p.id,Object.assign({},old,p,{price:p.price===null?old.price??null:p.price,ean:p.ean||old.ean||''}))});
+ return {v:1,origin:'carrefour-browser',page:page,observedAt:new Date().toISOString(),products:Array.from(result.values()).slice(0,140).map(function(p){return Object.assign({},p,{state:promo?'promo_page':'unknown',observedAt:new Date().toISOString()})})}
+}
+function encoded(v){var bytes=new TextEncoder().encode(JSON.stringify(v)),str='';for(var i=0;i<bytes.length;i++)str+=String.fromCharCode(bytes[i]);return btoa(str).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
+function send(products){
+ if(!products.length)return;
+ var obj={v:1,origin:'carrefour-browser',products:products};
+ if(receiver&&!receiver.closed&&ready){for(var i=0;i<products.length;i+=35)receiver.postMessage({cfSatellite:1,payload:{v:1,origin:obj.origin,products:products.slice(i,i+35)}},'https://bambuchastudent.github.io');return}
+ var slice=products.slice(0,40),path=DEST+'#import='+encoded({v:1,origin:obj.origin,products:slice});
+ receiver=window.open(path,TARGET);
+ if(!receiver){alert('Chrome заблокировал окно импорта. Разреши всплывающее окно и повтори.');return}
+ ready=false;
+}
+function scan(force){var snap=extract(),changes=[];snap.products.forEach(function(p){var k=JSON.stringify([p.name,p.price,p.ean,p.state,p.url]);if(force||seen.get(p.id)!==k){seen.set(p.id,k);changes.push(p)}});if(changes.length){last=seen.size;send(changes)}badge.textContent='CF Сбор · '+seen.size+' товаров'+(changes.length?' · +'+changes.length:'');if(!changes.length&&force)badge.textContent='CF Сбор · новых товаров нет';}
+var badge=document.createElement('button');badge.textContent='CF Сбор · старт';badge.type='button';badge.style.cssText='position:fixed;right:9px;bottom:65px;z-index:2147483647;padding:9px 11px;background:#0758bf;color:white;border:2px solid white;border-radius:14px;font:700 12px system-ui;box-shadow:0 4px 20px #2228';badge.onclick=function(){ready=false;scan(true)};document.documentElement.appendChild(badge);
+window.addEventListener('message',function(e){if(e.origin!=='https://bambuchastudent.github.io'||e.source!==receiver||!e.data||e.data.cfSatelliteReady!==1)return;ready=true;scan(true)});
+var observer=new MutationObserver(function(){clearTimeout(clock);clock=setTimeout(function(){scan(false)},1300)});observer.observe(document.body||document.documentElement,{subtree:true,childList:true});
+window.__cfSatelliteCollector={run:function(){ready=false;scan(true)},stop:function(){observer.disconnect();badge.remove();delete window.__cfSatelliteCollector}};
+scan(true);
+})();
