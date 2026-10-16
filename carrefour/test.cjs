@@ -1,0 +1,50 @@
+'use strict';
+// Dependency-free smoke checks for the public Chrome bookmarklet and cache importer.
+const fs=require('node:fs');
+const assert=require('node:assert/strict');
+const path=require('node:path');
+const dir=__dirname;
+function htmlJS(filename){
+ const source=fs.readFileSync(path.join(dir,filename),'utf8');
+ const match=source.match(/<script>([\s\S]*?)<\/script>/);
+ assert(match,'Script missing: '+filename);
+ new Function(match[1]);
+ return match[1];
+}
+const importer=htmlJS('import.html');
+const main=htmlJS('index.html');
+const setup=htmlJS('setup.html');
+const bookmarklet=fs.readFileSync(path.join(dir,'bookmarklet.txt'),'utf8').trim();
+assert(bookmarklet.startsWith('javascript:'),'Missing bookmarklet protocol');
+new Function(bookmarklet.slice('javascript:'.length));
+assert(bookmarklet.includes('carrefour.es'),'Collector host check missing');
+assert(!bookmarklet.includes('document.cookie'),'Collector must not copy session cookies');
+
+const body=importer.slice(importer.indexOf('function valid(s){'),importer.indexOf('function render(){'));
+const {valid,sanitize,combine}=new Function(body+';return {valid,sanitize,combine}')();
+const url='https://www.carrefour.es/supermercado/gel/R-719204061/p';
+assert.equal(valid('8410436396479'),'8410436396479');
+assert.equal(valid('8410436396470'),'');
+const item={id:'R-719204061',name:'Somat gel 800ml',ean:'8410436396479',price:8.03,url,state:'promo_page',observedAt:'2026-10-16T10:00:00.000Z'};
+assert.equal(sanitize(item).ean,'8410436396479');
+assert.equal(sanitize({...item,url:'https://example.com/test'}),null,'Reject arbitrary links');
+const newer={...item,price:7.98,ean:'',observedAt:'2026-10-16T14:00:00.000Z'};
+const older={...item,price:9.00,observedAt:'2026-10-15T15:00:00.000Z'};
+const merged=combine([newer],[older]);
+assert.equal(merged.length,1);
+assert.equal(merged[0].price,7.98,'Newer price must win');
+assert.equal(merged[0].ean,item.ean,'Known EAN must survive a later missing EAN');
+const frag=main.slice(main.indexOf('function mergeCatalog(seed,remote,local){'),main.indexOf('function apply(j,offline){'));
+const mergeCatalog=new Function('valid',frag+';return mergeCatalog')(valid);
+const joined=mergeCatalog([{...item,id:'somat50'}],[{...item,id:'R-719204061',state:'unknown',price:null}],[]);
+assert.equal(joined.length,1,'Catalog should deduplicate by canonical URL');
+assert.equal(joined[0].price,8.03,'Missing price should not overwrite known price');
+assert.equal(joined[0].state,'promo_page','Unverified visit must not remove existing promo evidence');
+const unknown=mergeCatalog([], [{...item,ean:'',state:'unknown'}],[]);
+assert.equal(unknown[0].state,'unknown','Regular product page must not imply promotional eligibility');
+const catalog=JSON.parse(fs.readFileSync(path.join(dir,'catalog.json'),'utf8'));
+const shared=JSON.parse(fs.readFileSync(path.join(dir,'community.json'),'utf8'));
+assert(Array.isArray(catalog.products)&&catalog.products.length>0);
+assert(Array.isArray(shared.products));
+assert(setup.includes('./bookmarklet.txt'),'Setup page must load the bookmarklet');
+console.log('Carrefour checks passed: scripts, EAN, hostname validation, merge, price recency, promo status.');
