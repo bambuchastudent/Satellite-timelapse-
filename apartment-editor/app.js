@@ -270,7 +270,7 @@ for(const element of document.querySelectorAll('[data-dim]')) element.addEventLi
  const delta=v-old;
  if(key==='living'){for(const f of documentData.furniture)if(f.room!=='living')f.x+=delta;for(const wall of (documentData.extraWalls??[])){if(wall.x1>old)wall.x1+=delta;if(wall.x2>old)wall.x2+=delta;}}
  if(key==='bedroom'){for(const f of documentData.furniture)if(f.room==='kitchen')f.x+=delta;for(const wall of (documentData.extraWalls??[])){if(wall.x1>documentData.dims.living+old)wall.x1+=delta;if(wall.x2>documentData.dims.living+old)wall.x2+=delta;}}
- documentData.dims[key]=v;keepFurnitureWithinRooms(documentData);resetCamera();update();
+ documentData.dims[key]=v;keepFurnitureWithinRooms(documentData);documentData.openings?.forEach(constrainOpening);resetCamera();update();
 });
 function constrainOpening(entry){
  const total=totalWidth(documentData.dims);
