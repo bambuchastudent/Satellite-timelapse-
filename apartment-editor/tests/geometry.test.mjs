@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {starter,edges,edgeId,area,simplePolygon,moveNode,moveEdge,resizeEdge,resizeRoom,splitEdge,addRoom,addPolygonRoom,safeDocument,segment} from '../geometry.js';
-test('default has 2 extra rooms on the right and a nonrectangular corridor',()=>{const d=starter();assert.equal(d.rooms.length,7);assert.equal(d.rooms[3].name,'Комната справа 1');assert.equal(d.rooms[4].name,'Комната справа 2');assert.ok(d.rooms[5].vertices.length>5);assert.ok(d.rooms.every(r=>simplePolygon(r.vertices.map(id=>d.nodes[id]))));});
+test('default has 2 extra rooms on the right and a nonrectangular corridor',()=>{const d=starter();assert.equal(d.rooms.length,7);assert.equal(d.rooms[3].name,'Комната справа от кухни');assert.equal(d.rooms[4].name,'Комната справа 2');assert.ok(d.rooms[5].vertices.length>5);assert.ok(d.rooms.every(r=>simplePolygon(r.vertices.map(id=>d.nodes[id]))));});
 test('walls deduplicate shared room edges',()=>{const d=starter(),e=edges(d);const edge= e.find(x=>x.rooms.length===2);assert.ok(edge);assert.equal(e.filter(x=>x.id===edge.id).length,1);});
 test('all rooms have positive area',()=>{const d=starter();for(const r of d.rooms)assert.ok(area(d,r)>1);});
 test('drag shared corner updates all connected rooms',()=>{const d=starter(),shared=d.rooms[0].vertices[1];assert.ok(d.rooms[1].vertices.includes(shared));const p=d.nodes[shared];assert.equal(moveNode(d,shared,p.x+.2,p.z),true);assert.equal(d.nodes[shared].x,p.x+.2);});
@@ -14,3 +14,13 @@ test('add rectangle to the right and custom concave room',()=>{const d=starter()
 test('reject self-intersecting shape',()=>{const d=starter();assert.equal(addPolygonRoom(d,[{x:0,z:0},{x:2,z:2},{x:2,z:0},{x:0,z:2}]),null);});
 test('save and open v2 JSON without loss of rooms',()=>{const d=starter(),n=safeDocument(JSON.parse(JSON.stringify(d)));assert.equal(n.rooms.length,d.rooms.length);assert.equal(n.openings.length,d.openings.length);});
 test('migrate legacy sizes, furniture and extra partitions',()=>{const old={version:1,dims:{living:5,bedroom:4,kitchen:3,depth:4.5,height:2.75},furniture:[{id:'a',room:'living',x:1,z:2,w:1,d:1,h:1}],extraWalls:[{x1:1,z1:1,x2:2,z2:1}]};const d=starter(old);assert.equal(d.rooms.length,7);assert.equal(d.furniture.length,1);assert.equal(d.partitions.length,1);assert.equal(d.height,2.75);});
+test('room reference photos survive JSON but reject invalid sources',()=>{
+  const d=starter(),roomId=d.rooms[0].id,otherId=d.rooms[1].id;
+  d.references[roomId]=['data:image/jpeg;base64,QUJD','data:image/jpeg;base64,REVG'];
+  d.references[otherId]=['https://example.com/photo.jpg'];
+  d.references['not-a-room']=['data:image/jpeg;base64,QUJD'];
+  const n=safeDocument(JSON.parse(JSON.stringify(d)));
+  assert.deepEqual(n.references[roomId],d.references[roomId]);
+  assert.deepEqual(n.references[otherId],[]);
+  assert.equal(n.references['not-a-room'],undefined);
+});

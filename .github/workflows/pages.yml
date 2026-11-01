@@ -26,7 +26,10 @@ jobs:
       - name: Test Carrefour collector, importer, and cache
         run: node carrefour/test.cjs
       - name: Test apartment editor data model
-        run: node --test apartment-editor/tests/*.test.mjs
+        run: |
+          node --check apartment-editor/editor.js
+          node --check apartment-editor/geometry.js
+          node --test apartment-editor/tests/*.test.mjs
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
       - name: Upload static site
