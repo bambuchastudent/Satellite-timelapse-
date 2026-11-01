@@ -1,0 +1,16 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {starter,edges,edgeId,area,simplePolygon,moveNode,moveEdge,resizeEdge,resizeRoom,splitEdge,addRoom,addPolygonRoom,safeDocument,segment} from '../geometry.js';
+test('default has 2 extra rooms on the right and a nonrectangular corridor',()=>{const d=starter();assert.equal(d.rooms.length,7);assert.equal(d.rooms[3].name,'Комната справа 1');assert.equal(d.rooms[4].name,'Комната справа 2');assert.ok(d.rooms[5].vertices.length>5);assert.ok(d.rooms.every(r=>simplePolygon(r.vertices.map(id=>d.nodes[id]))));});
+test('walls deduplicate shared room edges',()=>{const d=starter(),e=edges(d);const edge= e.find(x=>x.rooms.length===2);assert.ok(edge);assert.equal(e.filter(x=>x.id===edge.id).length,1);});
+test('all rooms have positive area',()=>{const d=starter();for(const r of d.rooms)assert.ok(area(d,r)>1);});
+test('drag shared corner updates all connected rooms',()=>{const d=starter(),shared=d.rooms[0].vertices[1];assert.ok(d.rooms[1].vertices.includes(shared));const p=d.nodes[shared];assert.equal(moveNode(d,shared,p.x+.2,p.z),true);assert.equal(d.nodes[shared].x,p.x+.2);});
+test('invalid crossing corner placement is blocked',()=>{const d=starter(),id=d.rooms[0].vertices[1];const prev={...d.nodes[id]};assert.equal(moveNode(d,id,0,0),false);assert.deepEqual(d.nodes[id],prev);});
+test('edge move and resize can be validated',()=>{const d=starter(),e=edges(d).find(x=>x.rooms.length===1 && x.a===d.rooms[0].vertices[0]);assert.ok(e);const L=segment(d,e).length;assert.equal(resizeEdge(d,e,L+.1),true);});
+test('split edge adds corner to every adjacent room',()=>{const d=starter(),e=edges(d).find(e=>e.rooms.length===2);assert.ok(e);const before=d.rooms.map(r=>r.vertices.length);const id=splitEdge(d,e);assert.ok(id);for(let i=0;i<d.rooms.length;i++)assert.equal(d.rooms[i].vertices.length,before[i]+(e.rooms.includes(d.rooms[i].id)?1:0));});
+test('split edge preserves opening in new segment',()=>{const d=starter(),o=d.openings[0],before=o.wall;const e=edges(d).find(e=>e.id===before);splitEdge(d,e);assert.notEqual(o.wall,before);assert.ok(edges(d).some(e=>e.id===o.wall));});
+test('reshape a room by moving its far edge',()=>{const d=starter();assert.equal(resizeRoom(d,d.rooms[4].id,'x',.1),true);});
+test('add rectangle to the right and custom concave room',()=>{const d=starter();const r=addRoom(d);assert.ok(area(d,r)>10);const r2=addPolygonRoom(d,[{x:26,z:0},{x:29,z:0},{x:29,z:2},{x:27,z:2},{x:27,z:4},{x:26,z:4}]);assert.ok(r2);assert.equal(r2.vertices.length,6);});
+test('reject self-intersecting shape',()=>{const d=starter();assert.equal(addPolygonRoom(d,[{x:0,z:0},{x:2,z:2},{x:2,z:0},{x:0,z:2}]),null);});
+test('save and open v2 JSON without loss of rooms',()=>{const d=starter(),n=safeDocument(JSON.parse(JSON.stringify(d)));assert.equal(n.rooms.length,d.rooms.length);assert.equal(n.openings.length,d.openings.length);});
+test('migrate legacy sizes, furniture and extra partitions',()=>{const old={version:1,dims:{living:5,bedroom:4,kitchen:3,depth:4.5,height:2.75},furniture:[{id:'a',room:'living',x:1,z:2,w:1,d:1,h:1}],extraWalls:[{x1:1,z1:1,x2:2,z2:1}]};const d=starter(old);assert.equal(d.rooms.length,7);assert.equal(d.furniture.length,1);assert.equal(d.partitions.length,1);assert.equal(d.height,2.75);});
