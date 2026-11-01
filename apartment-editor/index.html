@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Квартира · план сверху · Satellite</title>
+<style>
+:root{font:15px system-ui,-apple-system,Segoe UI,sans-serif;color:#263d3c;background:#eef3f0}
+*{box-sizing:border-box}body{margin:0}.shell{display:grid;grid-template-columns:295px minmax(0,1fr);height:100dvh}
+aside{background:white;border-right:1px solid #d8e4df;padding:20px;overflow:auto}
+h1{font-size:24px;margin:4px 0 8px}h2{font-size:13px;margin:22px 0 9px;color:#47746c;text-transform:uppercase;letter-spacing:.07em}
+small,.hint{color:#728683;line-height:1.55}.hint{font-size:12px}
+section{border-top:1px solid #e6ede9;margin-top:17px}
+label{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:9px 0;font-size:13px}
+input[type=number],select{padding:7px;border:1px solid #cfddd6;border-radius:7px;background:#fbfcfb;color:#24413e}
+input[type=number]{width:85px;text-align:right}select{max-width:160px}
+button,.upload{display:inline-block;cursor:pointer;border:1px solid #cbdcd3;background:white;color:#204943;border-radius:9px;padding:9px 11px;font-weight:600;font-size:12px}
+button:hover,.upload:hover{background:#e6f2ed}button.active,button.primary{background:#1f675a;color:#fff;border-color:#1f675a}
+button:disabled{opacity:.4;cursor:not-allowed}.full{width:100%;margin:5px 0}.two{display:flex;gap:6px;margin:8px 0}.two>*{flex:1;min-width:0}
+main{padding:16px;display:flex;min-width:0;flex-direction:column;gap:10px}
+header{display:flex;gap:9px;justify-content:space-between;align-items:center;flex-wrap:wrap}
+#board{background:#dbe8e3;border:1px solid #c8d9d1;border-radius:15px;flex:1;min-height:420px;position:relative;overflow:hidden}
+#board>div{width:100%;height:100%}.notice{position:absolute;z-index:2;left:13px;top:13px;background:#ffffffe6;padding:9px 12px;border-radius:9px;pointer-events:none;font-size:12px}
+#status{font-size:12px;color:#69827b;min-height:20px}.tag{font-size:11px;text-transform:uppercase;letter-spacing:.13em;color:#619588;font-weight:800}
+footer{font-size:11px;color:#778e87}a{color:#176d60}
+@media(max-width:760px){.shell{grid-template-columns:1fr;height:auto}aside{max-height:none}main{min-height:75vh}#board{height:62vh;min-height:420px}}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/konva@9.3.22/konva.min.js"></script>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}</script>
+</head>
+<body>
+<div class="shell">
+<aside>
+<div class="tag">Satellite · home lab</div>
+<h1>План квартиры</h1>
+<p class="hint">Черновик: гостиная, спальня и кухня вдоль одного фасада. Балкон между гостиной и спальней. Все размеры пока условные.</p>
+<section><h2>Размеры в метрах</h2>
+<label>Гостиная <input data-dim="living" type="number" min="2" max="9" step=".1"></label>
+<label>Спальня <input data-dim="bedroom" type="number" min="2" max="9" step=".1"></label>
+<label>Кухня <input data-dim="kitchen" type="number" min="2" max="8" step=".1"></label>
+<label>Глубина комнат <input data-dim="depth" type="number" min="2.5" max="9" step=".1"></label>
+<label>Коридор <input data-dim="hall" type="number" min=".8" max="3" step=".1"></label>
+<label>Потолки <input data-dim="height" type="number" min="2" max="4.5" step=".05"></label>
+<label>Балкон ширина <input data-dim="balconyW" type="number" min=".8" max="3" step=".1"></label>
+<label>Балкон глубина <input data-dim="balconyD" type="number" min=".6" max="3" step=".1"></label>
+</section>
+<section><h2>Дорисовать план</h2>
+<button id="draw" class="full primary">✎ Нарисовать перегородку</button>
+<button id="undo" class="full">↶ Убрать последнюю стену</button>
+<p class="hint">В режиме рисования нажми две точки на плане. Стена появится в чертеже и при экспорте в Blender. Шаг сетки — 10 см.</p>
+</section>
+<section><h2>Мебель</h2>
+<label>Помещение <select id="room"><option value="living">Гостиная</option><option value="bedroom">Спальня</option><option value="kitchen">Кухня</option></select></label>
+<label>Предмет <select id="type"><option value="sofa">Диван</option><option value="bed">Кровать</option><option value="table">Стол</option><option value="wardrobe">Шкаф</option><option value="cabinet">Тумба</option></select></label>
+<button id="add" class="full">+ Добавить мебель</button>
+<div id="selection" class="hint">Нажми на мебель и перетащи её мышью или пальцем.</div>
+<div class="two"><label>Ширина <input id="itemW" type="number" step=".1" min=".1" max="6"></label><label>Глубина <input id="itemD" type="number" step=".1" min=".1" max="6"></label></div>
+<button id="remove" class="full" disabled>Удалить выбранный предмет</button>
+</section>
+<section><h2>Сохранение</h2>
+<div class="two"><button id="save" title="Скачать редактируемый файл">JSON проекта</button><label class="upload" style="margin:0">Открыть JSON<input id="open" type="file" accept=".json" hidden></label></div>
+<div class="two"><button id="png">Картинка PNG</button><button id="glb" class="primary">Модель GLB</button></div>
+<p class="hint">JSON — чтобы продолжить правки здесь; GLB — чтобы открыть в Blender. Данные сохраняются локально на устройстве, без сервера.</p>
+</section>
+</aside>
+<main>
+<header><div><strong>План сверху</strong><div class="hint">Нажимай на мебель, двигай и дорисовывай стены</div></div><div class="tag">бесплатно · open source</div></header>
+<div id="board"><div class="notice">Окна <span style="color:#168fba">━━</span> · балкон у фасада · масштаб по метрам</div><div id="stage"></div></div>
+<div id="status">Загружаю редактор…</div>
+<footer>План — эскиз, не архитектурный обмер. <a href="./README.md">Инструкция и ограничения</a></footer>
+</main>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+const $=id=>document.getElementById(id);
+const key='satellite-apartment-plan-2026-v1';
+const defaults=()=>({version:1,dims:{living:4.5,bedroom:3.9,kitchen:3.1,depth:4.1,hall:1.4,height:2.65,balconyW:1.6,balconyD:1.65},walls:[],items:[
+{id:1,type:'sofa',room:'living',x:1.55,z:2.2,w:2.0,d:.9},
+{id:2,type:'table',room:'living',x:3.2,z:2.0,w:1.0,d:.65},
+{id:3,type:'bed',room:'bedroom',x:6.5,z:2.2,w:1.6,d:2.0},
+{id:4,type:'wardrobe',room:'bedroom',x:5,z:1.0,w:1.2,d:.65},
+{id:5,type:'cabinet',room:'kitchen',x:9.5,z:3.2,w:1.5,d:.6}
+]});
+const roomNames={living:'Гостиная',bedroom:'Спальня',kitchen:'Кухня'};
+const palette={sofa:'#6f9e91',table:'#b88f6b',bed:'#c3a7a0',wardrobe:'#c3b18e',cabinet:'#97b9b2'};
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+let state=defaults(),selected=null,drawing=false,first=null,px=60,ox=50,oy=100,preview=null;
+try{const saved=localStorage.getItem(key);if(saved)state=readState(JSON.parse(saved));}catch(e){console.warn('Invalid saved plan',e);}
+function readState(raw){
+ if(!raw||raw.version!==1||!raw.dims||!Array.isArray(raw.walls)||!Array.isArray(raw.items))throw Error('Неверный формат JSON');
+ const next=defaults();
+ for(const [k,def] of Object.entries(next.dims)){const n=Number(raw.dims[k]);if(!Number.isFinite(n)||n<=0||n>30)throw Error('Некорректный размер: '+k);next.dims[k]=n;}
+ next.walls=raw.walls.slice(0,300).map(w=>{const v={};for(const k of ['x1','z1','x2','z2']){v[k]=Number(w[k]);if(!Number.isFinite(v[k])||Math.abs(v[k])>60)throw Error('Некорректная стена');}return v;});
+ next.items=raw.items.slice(0,300).map(i=>{
+  if(!['living','bedroom','kitchen'].includes(i.room))throw Error('Неизвестная комната');
+  const v={id:Number(i.id),room:i.room,type:palette[i.type]?i.type:'cabinet'};
+  for(const k of ['x','z','w','d']){v[k]=Number(i[k]);if(!Number.isFinite(v[k])||Math.abs(v[k])>60)throw Error('Некорректная мебель');}
+  v.w=clamp(v.w,.1,6);v.d=clamp(v.d,.1,6);return v;
+ });
+ return next;
+}
+const total=()=>state.dims.living+state.dims.bedroom+state.dims.kitchen;
+function bounds(room){const d=state.dims;const x=room==='living'?0:room==='bedroom'?d.living:d.living+d.bedroom;return{x0:x,x1:x+d[room],z0:0,z1:d.depth};}
+function persist(){try{localStorage.setItem(key,JSON.stringify(state));$('status').textContent='Сохранено в браузере · для переноса на другое устройство скачай JSON';}catch(e){$('status').textContent='Не удалось сохранить локально — скачай JSON';}}
+function sync(){for(const el of document.querySelectorAll('[data-dim]'))el.value=state.dims[el.dataset.dim];}
+const stage=new Konva.Stage({container:'stage',width:600,height:600});
+const layer=new Konva.Layer();stage.add(layer);
+const snap=v=>Math.round(v*10)/10;
+const X=x=>ox+x*px,Y=z=>oy+(z+state.dims.balconyD)*px;
+const fromScreen=pt=>({x:snap(clamp((pt.x-ox)/px,0,total())),z:snap(clamp((pt.y-oy)/px-state.dims.balconyD,-state.dims.balconyD,state.dims.depth+state.dims.hall))});
+function rect(x,z,w,d,fill,stroke='#b4c8bd',strokeWidth=1){
+ return new Konva.Rect({x:X(x),y:Y(z),width:w*px,height:d*px,fill,stroke,strokeWidth,perfectDrawEnabled:false});
+}
+function line(x1,z1,x2,z2,color='#46635d',width=.12){
+ return new Konva.Line({points:[X(x1),Y(z1),X(x2),Y(z2)],stroke:color,strokeWidth:width*px,lineCap:'square',listening:false});
+}
+function text(s,x,z,size=14){
+ return new Konva.Text({text:s,x:X(x),y:Y(z),fontFamily:'system-ui',fontSize:size,fill:'#45645e',align:'center',listening:false});
+}
+function shape(type,x,z,w,d){
+ if(type==='bed')return new Konva.Rect({x,y:z,width:w,height:d,cornerRadius:7,fill:palette[type],stroke:'#59706b'});
+ if(type==='table')return new Konva.Rect({x,y:z,width:w,height:d,cornerRadius:30,fill:palette[type],stroke:'#86664a'});
+ return new Konva.Rect({x,y:z,width:w,height:d,cornerRadius:5,fill:palette[type],stroke:'#5b7770'});
+}
+function render(){
+ layer.destroyChildren();
+ const d=state.dims,w=total();
+ const rooms=[['living',0,d.living,'#f1e6d6'],['bedroom',d.living,d.bedroom,'#e8edf2'],['kitchen',d.living+d.bedroom,d.kitchen,'#e7eadc']];
+ layer.add(rect(0,d.depth,w,d.hall,'#e5e2dc'));
+ layer.add(text('Коридор',w/2-0.6,d.depth+d.hall*.45,13));
+ for(const [id,start,width,color] of rooms){
+  layer.add(rect(start,0,width,d.depth,color));
+  layer.add(text(roomNames[id],start+width/2-.65,d.depth*.43,15));
+  layer.add(text(width.toFixed(1)+' × '+d.depth.toFixed(1)+' м',start+width/2-.65,d.depth*.65,12));
+ }
+ layer.add(rect(d.living-d.balconyW/2,-d.balconyD,d.balconyW,d.balconyD,'#c6ddcf','#769c89',2));
+ layer.add(text('Балкон',d.living-d.balconyW/2+.12,-d.balconyD*.55,12));
+ for(const x of [0,d.living,d.living+d.bedroom,w])layer.add(line(x,0,x,d.depth,'#55716a'));
+ layer.add(line(0,d.depth,w,d.depth));
+ layer.add(line(0,d.depth+d.hall,w,d.depth+d.hall));
+ for(const room of ['living','bedroom','kitchen']){
+  const b=bounds(room),x=(b.x0+b.x1)/2;
+  layer.add(line(x-.46,d.depth,x+.46,d.depth,'#fdfbf7',.17));
+  layer.add(line(x-.3,0,x+.3,0,'#1598ba',.09));
+ }
+ for(const wall of state.walls)layer.add(line(wall.x1,wall.z1,wall.x2,wall.z2,'#9e5d42'));
+ for(const item of state.items){
+  const b=bounds(item.room);
+  const group=new Konva.Group({x:X(item.x-item.w/2),y:Y(item.z-item.d/2),draggable:!drawing});
+  const body=shape(item.type,0,0,item.w*px,item.d*px);
+  body.strokeWidth(item.id===selected?3:1);
+  if(item.id===selected)body.stroke('#df6d36');
+  group.add(body);
+  const tag=new Konva.Text({text:{sofa:'Диван',bed:'Кровать',table:'Стол',wardrobe:'Шкаф',cabinet:'Тумба'}[item.type],x:0,y:item.d*px/2-7,width:item.w*px,align:'center',fontSize:11,fill:'#22413b',listening:false});
+  group.add(tag);
+  group.on('click tap',e=>{if(drawing)return;e.cancelBubble=true;selected=item.id;selection();render();});
+  group.on('dragend',()=>{
+   const x=(group.x()-ox)/px+item.w/2;
+   const z=(group.y()-oy)/px-d.balconyD+item.d/2;
+   item.x=clamp(snap(x),b.x0+item.w/2,b.x1-item.w/2);
+   item.z=clamp(snap(z),item.d/2,d.depth-item.d/2);
+   persist();render();
+  });
+  layer.add(group);
+ }
+ if(first){layer.add(new Konva.Circle({x:X(first.x),y:Y(first.z),radius:5,fill:'#e36c38',listening:false}));}
+ layer.draw();
+}
+function selection(){
+ const item=state.items.find(i=>i.id===selected);
+ $('remove').disabled=!item;
+ $('selection').textContent=item?'Выбрано: '+item.type+' · перетаскивай на плане':'Нажми на мебель и перетащи её.';
+ $('itemW').value=item?item.w:'';$('itemD').value=item?item.d:'';
+}
+function layout(){
+ const c=$('stage').getBoundingClientRect(),d=state.dims;
+ stage.width(Math.max(300,c.width));stage.height(Math.max(420,c.height));
+ px=Math.max(19,Math.min(72,(stage.width()-70)/(total()+.7),(stage.height()-130)/(d.depth+d.hall+d.balconyD+.5)));
+ ox=Math.max(30,(stage.width()-total()*px)/2);
+ oy=Math.max(60,(stage.height()-(d.depth+d.hall+d.balconyD)*px)/2);
+ render();
+}
+window.addEventListener('resize',layout);
+for(const el of document.querySelectorAll('[data-dim]'))el.addEventListener('change',()=>{
+ const k=el.dataset.dim,n=Number(el.value);if(!Number.isFinite(n)||n<Number(el.min)||n>Number(el.max))return sync();
+ const old=state.dims[k],delta=n-old;
+ if(k==='living'||k==='bedroom'){
+  const boundary=k==='living'?old:state.dims.living+old;
+  for(const item of state.items)if(k==='living'?item.room!=='living':item.room==='kitchen')item.x+=delta;
+  for(const wall of state.walls){if(wall.x1>boundary)wall.x1+=delta;if(wall.x2>boundary)wall.x2+=delta;}
+ }
+ state.dims[k]=n;layout();persist();
+});
+$('draw').addEventListener('click',()=>{
+ drawing=!drawing;first=null;selected=null;
+ $('draw').classList.toggle('active',drawing);
+ $('draw').textContent=drawing?'✓ Завершить рисование':'✎ Нарисовать перегородку';
+ selection();render();
+ $('status').textContent=drawing?'Нажми две точки для новой стены':'Рисование выключено';
+});
+stage.on('click tap',e=>{
+ if(!drawing||e.target!==stage&&e.target.getClassName()==='Group')return;
+ const pt=stage.getPointerPosition();if(!pt)return;
+ const p=fromScreen(pt);
+ if(!first){first=p;$('status').textContent='Первая точка: '+p.x+' × '+p.z+' м';render();return;}
+ if(Math.hypot(p.x-first.x,p.z-first.z)>=.1){
+ state.walls.push({x1:first.x,z1:first.z,x2:p.x,z2:p.z});persist();
+ }
+ first=null;render();
+});
+$('undo').addEventListener('click',()=>{state.walls.pop();first=null;render();persist();});
+$('add').addEventListener('click',()=>{
+ const room=$('room').value,type=$('type').value,b=bounds(room);
+ const sizes={sofa:[2,.9],bed:[1.6,2],table:[1,.7],wardrobe:[1.2,.65],cabinet:[1.2,.6]};
+ const [w,d]=sizes[type];const item={id:Date.now(),room,type,w,d,x:(b.x0+b.x1)/2,z:state.dims.depth/2};
+ state.items.push(item);selected=item.id;selection();render();persist();
+});
+$('remove').addEventListener('click',()=>{state.items=state.items.filter(i=>i.id!==selected);selected=null;selection();render();persist();});
+for(const [id,k] of [['itemW','w'],['itemD','d']])$(id).addEventListener('change',e=>{
+ const item=state.items.find(i=>i.id===selected),n=Number(e.target.value);
+ if(!item||!Number.isFinite(n)||n<.1||n>6){selection();return;}
+ item[k]=n;const b=bounds(item.room);
+ item.x=clamp(item.x,b.x0+n/2,b.x1-n/2);item.z=clamp(item.z,n/2,state.dims.depth-n/2);
+ render();persist();
+});
+function download(blob,name){
+ const a=document.createElement('a'),url=URL.createObjectURL(blob);a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);
+}
+$('save').addEventListener('click',()=>download(new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),'my-apartment.json'));
+$('open').addEventListener('change',async e=>{
+ const file=e.target.files?.[0];if(!file)return;
+ try{if(file.size>1000000)throw Error('JSON слишком большой');state=readState(JSON.parse(await file.text()));selected=null;first=null;sync();selection();layout();persist();}
+ catch(err){$('status').textContent='Ошибка: '+err.message;}
+ e.target.value='';
+});
+$('png').addEventListener('click',()=>{const a=document.createElement('a');a.href=stage.toDataURL({pixelRatio:2});a.download='apartment-plan.png';a.click();});
+const materials={wall:0xc5c5b8,balcony:0xacc4b2};
+function meshBox(group,w,h,d,x,y,z,color){
+ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color,roughness:.85}));
+ m.position.set(x,y,z);group.add(m);return m;
+}
+function exportScene(){
+ const d=state.dims,group=new THREE.Group(),w=total(),roomColors={living:0xe9d7c3,bedroom:0xd9e5ed,kitchen:0xdbe1d2};
+ let x=0;
+ for(const room of ['living','bedroom','kitchen']){
+  meshBox(group,d[room],.08,d.depth,x+d[room]/2,-.04,d.depth/2,roomColors[room]);x+=d[room];
+ }
+ meshBox(group,w,.08,d.hall,w/2,-.04,d.depth+d.hall/2,0xd6d4ce);
+ meshBox(group,d.balconyW,.08,d.balconyD,d.living,-.04,-d.balconyD/2,materials.balcony);
+ const wall=(x1,z1,x2,z2)=>{const dx=x2-x1,dz=z2-z1,L=Math.hypot(dx,dz);if(L<.09)return;const o=meshBox(group,L,d.height,.12,(x1+x2)/2,d.height/2,(z1+z2)/2,materials.wall);o.rotation.y=-Math.atan2(dz,dx);};
+ wall(0,0,0,d.depth+d.hall);wall(w,0,w,d.depth+d.hall);wall(0,d.depth+d.hall,w,d.depth+d.hall);
+ wall(0,0,w,0);wall(0,d.depth,w,d.depth);
+ wall(d.living,0,d.living,d.depth);wall(d.living+d.bedroom,0,d.living+d.bedroom,d.depth);
+ for(const wallData of state.walls)wall(wallData.x1,wallData.z1,wallData.x2,wallData.z2);
+ for(const item of state.items){
+  const heights={sofa:.78,bed:.55,table:.74,wardrobe:2.1,cabinet:.91};
+  const h=heights[item.type],color=new THREE.Color(palette[item.type]);
+  meshBox(group,item.w,h,item.d,item.x,h/2,item.z,color);
+ }
+ return group;
+}
+$('glb').addEventListener('click',async()=>{
+ $('status').textContent='Экспорт GLB для Blender…';
+ try{const scene=exportScene(),binary=await new GLTFExporter().parseAsync(scene,{binary:true});download(new Blob([binary],{type:'model/gltf-binary'}),'my-apartment.glb');$('status').textContent='GLB готов для Blender';}
+ catch(e){console.error(e);$('status').textContent='Ошибка GLB: '+e.message;}
+});
+sync();selection();layout();persist();
+</script>
+</body>
+</html>
