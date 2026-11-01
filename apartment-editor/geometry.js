@@ -6,11 +6,11 @@ export const edgeId=(a,b)=>[a,b].sort().join('~');
 const colors=['#e8d8c2','#d9e4ef','#e2e4d5','#e5d8dc','#d8e5dd','#e6e0d4'];
 export function starter(legacy=null){
  const d=legacy?.dims||{},widths=[d.living||4.5,d.bedroom||3.9,d.kitchen||3.1,2.9,2.7],depth=d.depth||4.1;
- const doc={version:2,height:d.height||2.65,nodes:{},rooms:[],partitions:[],walls:{},openings:[],furniture:[],textures:{},nextId:1};
+ const doc={version:2,height:d.height||2.65,nodes:{},rooms:[],partitions:[],walls:{},openings:[],furniture:[],textures:{},references:{},nextId:1};
  const node=(x,z)=>{const id='n'+doc.nextId++;doc.nodes[id]={x,z};return id;};
  const xs=[0];widths.forEach(w=>xs.push(xs.at(-1)+w));
  const top=xs.map(x=>node(x,0)),bottom=xs.map(x=>node(x,depth));
- ['Гостиная','Спальня','Кухня','Комната справа 1','Комната справа 2'].forEach((name,i)=>doc.rooms.push({id:'r'+doc.nextId++,name,color:colors[i],vertices:[top[i],top[i+1],bottom[i+1],bottom[i]]}));
+ ['Гостиная','Спальня','Кухня','Комната справа от кухни','Комната справа 2'].forEach((name,i)=>doc.rooms.push({id:'r'+doc.nextId++,name,color:colors[i],vertices:[top[i],top[i+1],bottom[i+1],bottom[i]]}));
  const outer=[[xs[5],depth+.8],[xs[5]-.7,depth+2.35],[xs[4]+.6,depth+2.9],[xs[3]+.5,depth+3.15],[xs[2]+.8,depth+3.2],[xs[2]-.6,depth+4.1],[xs[1]-.6,depth+4.6],[.85,depth+4.7],[0,depth+3.85]].map(p=>node(...p));
  doc.rooms.push({id:'corridor',name:'Коридор и прихожая',color:'#e6e1d7',vertices:[...bottom,...outer]});
  const balcony=[[xs[1]-.8,0],[xs[1]-.8,-1.55],[xs[1]+.8,-1.55],[xs[1]+.8,0]].map(p=>node(...p));
@@ -53,4 +53,12 @@ export function addRoom(doc,name='Новая комната'){const b=bounds(doc
 export function addPolygonRoom(doc,points,name='Новая комната'){if(!simplePolygon(points))return null;const vertices=points.map(p=>{const found=Object.entries(doc.nodes).find(([,n])=>Math.hypot(p.x-n.x,p.z-n.z)<.22);if(found)return found[0];const id='n'+doc.nextId++;doc.nodes[id]={x:snap(p.x),z:snap(p.z)};return id;});if(new Set(vertices).size<3||!simplePolygon(vertices.map(id=>doc.nodes[id])))return null;const room={id:'r'+doc.nextId++,name,color:colors[doc.rooms.length%colors.length],vertices};doc.rooms.push(room);return room;}
 export function onEdge(doc,e,t){const {a,dx,dz}=segment(doc,e);return {x:a.x+dx*t,z:a.z+dz*t};}
 export function project(doc,e,p){const {a,dx,dz,length}=segment(doc,e);return clamp(((p.x-a.x)*dx+(p.z-a.z)*dz)/(length*length||1),0,1);}
-export function safeDocument(raw){if(!raw||raw.version!==2||!raw.nodes||!Array.isArray(raw.rooms)||raw.rooms.length>100)throw Error('Неизвестный формат проекта');const d=copy(raw);d.height=clamp(Number(d.height)||2.65,2,5);if(Object.keys(d.nodes).length>2000)throw Error('Слишком много углов');for(const [id,n] of Object.entries(d.nodes))if(!Number.isFinite(n.x)||!Number.isFinite(n.z)||Math.abs(n.x)>100||Math.abs(n.z)>100)throw Error('Неверная точка '+id);if(!d.rooms.every(r=>Array.isArray(r.vertices)&&r.vertices.length<=150&&simplePolygon(r.vertices.map(id=>d.nodes[id]))))throw Error('Некорректная форма помещения');d.partitions=Array.isArray(d.partitions)?d.partitions.slice(0,200):[];d.walls=d.walls||{};d.openings=Array.isArray(d.openings)?d.openings.slice(0,150):[];d.furniture=Array.isArray(d.furniture)?d.furniture.slice(0,180):[];d.textures=d.textures||{};d.nextId=Math.max(Number(d.nextId)||1,200);const validEdges=new Set(edges(d).map(e=>e.id));d.openings=d.openings.filter(o=>validEdges.has(o.wall)&&Number.isFinite(o.t)&&Number.isFinite(o.width)&&['window','door'].includes(o.kind));return d;}
+export function safeDocument(raw){if(!raw||raw.version!==2||!raw.nodes||!Array.isArray(raw.rooms)||raw.rooms.length>100)throw Error('Неизвестный формат проекта');const d=copy(raw);d.height=clamp(Number(d.height)||2.65,2,5);if(Object.keys(d.nodes).length>2000)throw Error('Слишком много углов');for(const [id,n] of Object.entries(d.nodes))if(!Number.isFinite(n.x)||!Number.isFinite(n.z)||Math.abs(n.x)>100||Math.abs(n.z)>100)throw Error('Неверная точка '+id);if(!d.rooms.every(r=>Array.isArray(r.vertices)&&r.vertices.length<=150&&simplePolygon(r.vertices.map(id=>d.nodes[id]))))throw Error('Некорректная форма помещения');d.partitions=Array.isArray(d.partitions)?d.partitions.slice(0,200):[];d.walls=d.walls||{};d.openings=Array.isArray(d.openings)?d.openings.slice(0,150):[];d.furniture=Array.isArray(d.furniture)?d.furniture.slice(0,180):[];d.textures=d.textures||{};d.references={};
+ const validRoomIds=new Set(d.rooms.map(room=>room.id));
+ if(raw.references&&typeof raw.references==='object'&&!Array.isArray(raw.references)){
+   for(const [roomId,photos] of Object.entries(raw.references)){
+     if(!validRoomIds.has(roomId)||!Array.isArray(photos))continue;
+     d.references[roomId]=photos.slice(0,8).filter(src=>typeof src==='string'&&src.length<180000&&/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(src));
+   }
+ }
+ d.nextId=Math.max(Number(d.nextId)||1,200);const validEdges=new Set(edges(d).map(e=>e.id));d.openings=d.openings.filter(o=>validEdges.has(o.wall)&&Number.isFinite(o.t)&&Number.isFinite(o.width)&&['window','door'].includes(o.kind));return d;}

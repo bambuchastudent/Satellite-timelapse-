@@ -4,6 +4,31 @@ import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {GLTFExporter} from 'three/addons/exporters/GLTFExporter.js';
 import {starter,copy,clamp,snap,edgeId,edges,segment,area,roomBounds,bounds,center,moveNode,moveEdge,resizeEdge,resizeRoom,splitEdge,addRoom,addPolygonRoom,onEdge,project,safeDocument} from './geometry.js';
 const $=id=>document.getElementById(id);
+const importedResources=new Set(),loadingAssets=new Map(),importLoader=new GLTFLoader();
+function protectImported(sceneRoot){
+ sceneRoot.traverse(o=>{
+  if(o.geometry)importedResources.add(o.geometry);
+  for(const m of (Array.isArray(o.material)?o.material:[o.material])){
+   if(!m)continue;importedResources.add(m);
+   for(const prop of Object.values(m))if(prop&&prop.isTexture)importedResources.add(prop);
+  }
+ });
+}
+function ensureImportedModel(item){
+ const hit=assets.get(item.id);
+ if(hit&&hit.asset===item.asset)return Promise.resolve(hit.scene);
+ const pending=loadingAssets.get(item.id);
+ if(pending)return pending;
+ const promise=new Promise((resolve,reject)=>{
+  if(typeof item.asset!=='string'||!item.asset.startsWith('data:model/gltf-binary;base64,'))throw Error('Неверный формат GLB');
+  const raw=Uint8Array.from(atob(item.asset.split(',')[1]),c=>c.charCodeAt(0));
+  importLoader.parse(raw.buffer,'',g=>{protectImported(g.scene);assets.set(item.id,{asset:item.asset,scene:g.scene});resolve(g.scene);},reject);
+ });
+ loadingAssets.set(item.id,promise);
+ promise.then(()=>{loadingAssets.delete(item.id);if(doc.furniture.some(f=>f.id===item.id))rebuild();},
+              err=>{loadingAssets.delete(item.id);status('Ошибка GLB: '+err.message);});
+ return promise;
+}
 const STORE='satellite-apartment-plan-v2', OLD='satellite-apartment-editor-v1';
 let doc=starter();try{const v=localStorage.getItem(STORE),old=localStorage.getItem(OLD);if(v)doc=safeDocument(JSON.parse(v));else if(old)doc=starter(JSON.parse(old));}catch(e){console.warn('Could not load old project',e);}
 const isMobile=window.matchMedia('(pointer:coarse)').matches||window.innerWidth<780;
@@ -20,7 +45,7 @@ function invalidate(){if(renderScheduled||document.hidden)return;renderScheduled
 function persist(){try{localStorage.setItem(STORE,JSON.stringify(doc));}catch(e){status('Хранилище переполнено — сохрани JSON');}}
 function pointFromEvent(ev){const b=renderer.domElement.getBoundingClientRect();mouse.set((ev.clientX-b.left)/b.width*2-1,-((ev.clientY-b.top)/b.height)*2+1);caster.setFromCamera(mouse,activeCamera());if(!caster.ray.intersectPlane(plane,hit))return null;return {x:snap(hit.x),z:snap(hit.z)};}
 function picked(ev){const b=renderer.domElement.getBoundingClientRect();mouse.set((ev.clientX-b.left)/b.width*2-1,-((ev.clientY-b.top)/b.height)*2+1);caster.setFromCamera(mouse,activeCamera());return caster.intersectObjects(interactive,false)[0]?.object||null;}
-function dispose(group){const geometries=new Set(),materials=new Set();group.traverse(o=>{if(o.geometry&&!geometries.has(o.geometry)){geometries.add(o.geometry);o.geometry.dispose();}for(const m of (Array.isArray(o.material)?o.material:[o.material])){if(!m||materials.has(m))continue;materials.add(m);if(m.map&&!textureCacheHas(m.map))m.map.dispose();m.dispose();}});group.clear();}
+function dispose(group){const geometries=new Set(),materials=new Set();group.traverse(o=>{if(o.geometry&&!geometries.has(o.geometry)&&!importedResources.has(o.geometry)){geometries.add(o.geometry);o.geometry.dispose();}for(const m of (Array.isArray(o.material)?o.material:[o.material])){if(!m||materials.has(m)||importedResources.has(m))continue;materials.add(m);if(m.map&&!textureCacheHas(m.map)&&!importedResources.has(m.map))m.map.dispose();m.dispose();}});group.clear();}
 function textureCacheHas(t){return [...textureCache.values()].some(x=>x.texture===t);}
 function material(color,extra={}){return new THREE.MeshLambertMaterial({color,...extra});}
 function box(parent,w,h,d,x,y,z,color,extra={}){const o=new THREE.Mesh(new THREE.BoxGeometry(Math.max(.015,w),Math.max(.015,h),Math.max(.015,d)),typeof color==='string'?material(color):color);o.position.set(x,y,z);Object.assign(o.userData,extra);parent.add(o);if(extra.hit)interactive.push(o);return o;}
@@ -34,11 +59,34 @@ function addWall(e){const info=segment(doc,e);if(info.length<.12)return;const op
  const low=mode==='plan'?.35:mode==='iso'&&cut?1.03:cut&&mode==='perspective'?1.1:doc.height;let from=0;
  for(const opening of openings){const s=clamp(opening.t-opening.half,from,1),end=clamp(opening.t+opening.half,s,1);if(s>from)addSegment(e,from,s,0,low,'#e2dcd3');if(end>s){const sill=opening.kind==='door'?0:.82,top=opening.kind==='door'?2.12:2.03;if(low>sill)addSegment(e,s,end,0,Math.min(sill,low),'#e2dcd3');if(low>top)addSegment(e,s,end,top,low,'#e2dcd3');if(mode!=='plan'&&low>sill){const m=onEdge(doc,e,(s+end)/2),o=box(world,info.length*(end-s),Math.min(top,low)-sill,.018,m.x,(Math.min(top,low)+sill)/2,m.z,material(opening.kind==='door'?'#d5b57a':'#86c5dc',{transparent:true,opacity:.52}),{kind:'opening',id:opening.id,hit:true});o.rotation.y=-Math.atan2(info.dz,info.dx);}}
  from=end;}if(from<1)addSegment(e,from,1,0,low,'#e2dcd3');}
-function addFurniture(f){const group=new THREE.Group();group.position.set(f.x,0,f.z);group.rotation.y=(f.rotation||0)*Math.PI/180;world.add(group);
- if(f.type==='imported'&&f.asset){box(group,f.w,.15,f.d,0,.075,0,f.color||'#aa9e90',{kind:'furniture',id:f.id,hit:true});const stamp=building;const saved=assets.get(f.id);if(saved){const object=saved.clone(true);const b=new THREE.Box3().setFromObject(object),s=b.getSize(new THREE.Vector3());object.scale.set(f.w/s.x,f.h/s.y,f.d/s.z);group.add(object);}else{try{const raw=Uint8Array.from(atob(f.asset.split(',')[1]),c=>c.charCodeAt(0));new GLTFLoader().parse(raw.buffer,'',g=>{if(stamp!==building)return;assets.set(f.id,g.scene);rebuild();},()=>{});}catch{}}
- }else {const color=f.color||'#a0aaa0';if(f.type==='sofa'){box(group,f.w,.28,f.d,0,.33,0,color);box(group,f.w,.42,.16,0,.57,-f.d/2+.08,color);}else if(f.type==='bed'){box(group,f.w,.35,f.d,0,.25,0,'#a49389');box(group,f.w-.08,.16,f.d-.1,0,.54,0,color);}else if(f.type==='table'){box(group,f.w,.1,f.d,0,f.h-.05,0,color);box(group,.10,f.h-.1,.1,0,(f.h-.1)/2,0,'#7e695f');}else box(group,f.w,f.h,f.d,0,f.h/2,0,color);}
- const picker=box(decor,f.w,Math.max(.55,f.h),f.d,f.x,Math.max(.55,f.h)/2,f.z,new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false}),{kind:'furniture',id:f.id,hit:true});picker.rotation.y=group.rotation.y;
- if(selected?.kind==='furniture'&&selected.id===f.id&&mode==='plan')orb(decor,f.x,f.z,'furniture',f.id,'#ffa43c',.21);}
+function addFurniture(f){
+ const group=new THREE.Group();group.position.set(f.x,0,f.z);group.rotation.y=(f.rotation||0)*Math.PI/180;group.name=f.name||f.type;world.add(group);
+ if(f.type==='imported'&&f.asset){
+  const record=assets.get(f.id),saved=record?.asset===f.asset?record.scene:null;
+  if(saved){
+   const object=saved.clone(true),bbox=new THREE.Box3().setFromObject(object),size=bbox.getSize(new THREE.Vector3());
+   if(size.x>1e-5&&size.y>1e-5&&size.z>1e-5){
+    const mid=bbox.getCenter(new THREE.Vector3());
+    object.position.x-=mid.x;object.position.y-=bbox.min.y;object.position.z-=mid.z;
+    const scaleGroup=new THREE.Group();
+    scaleGroup.scale.set(f.w/size.x,f.h/size.y,f.d/size.z);
+    scaleGroup.add(object);group.add(scaleGroup);
+   }
+  }else{
+   box(group,f.w,.12,f.d,0,.06,0,f.color||'#b6bbb5');
+   ensureImportedModel(f).catch(()=>{});
+  }
+ }else {
+  const color=f.color||'#a0aaa0';
+  if(f.type==='sofa'){box(group,f.w,.28,f.d,0,.33,0,color);box(group,f.w,.42,.16,0,.57,-f.d/2+.08,color);}
+  else if(f.type==='bed'){box(group,f.w,.35,f.d,0,.25,0,'#a49389');box(group,f.w-.08,.16,f.d-.1,0,.54,0,color);}
+  else if(f.type==='table'){box(group,f.w,.1,f.d,0,f.h-.05,0,color);box(group,.10,f.h-.1,.1,0,(f.h-.1)/2,0,'#7e695f');}
+  else box(group,f.w,f.h,f.d,0,f.h/2,0,color);
+ }
+ const picker=box(decor,f.w,Math.max(.55,f.h),f.d,f.x,Math.max(.55,f.h)/2,f.z,new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false}),{kind:'furniture',id:f.id,hit:true});
+ picker.rotation.y=group.rotation.y;
+ if(selected?.kind==='furniture'&&selected.id===f.id&&mode==='plan')orb(decor,f.x,f.z,'furniture',f.id,'#ffa43c',.21);
+}
 function rebuild(){building++;interactive=[];dispose(world);dispose(decor);for(const [key,value] of textureCache)if(doc.textures?.[key]!==value.src){value.texture.dispose();textureCache.delete(key);}for(const r of doc.rooms)floor(r);
  const walls=edges(doc);for(const e of walls)addWall(e);for(const f of doc.furniture)addFurniture(f);
  if(mode==='plan'){for(const [id,p] of Object.entries(doc.nodes))orb(decor,p.x,p.z,'node',id,selected?.kind==='node'&&selected.id===id?'#ffc129':'#e55f45',.14);
@@ -60,13 +108,35 @@ function setView(next){if(['front','back','left','right'].includes(next)){side=n
 function markChanged(rebuildNow=true){persist();if(rebuildNow)rebuild();}
 function scheduleRebuild(){const now=performance.now();if(now-buildAt>75){buildAt=now;rebuild();return;}if(buildTimer)return;buildTimer=setTimeout(()=>{buildTimer=null;buildAt=performance.now();rebuild();},75);}
 function roomSelect(){const s=$('furnitureRoom'),v=s.value;s.replaceChildren();for(const r of doc.rooms.filter(r=>r.kind!=='balcony')){const opt=document.createElement('option');opt.value=r.id;opt.textContent=r.name;s.appendChild(opt);}if([...s.options].some(x=>x.value===v))s.value=v;}
+function refreshReferenceGallery(){
+ const gallery=$('roomReferenceGallery');gallery.replaceChildren();
+ const room=doc.rooms.find(r=>r.id===selected?.id&&selected.kind==='room');
+ const photos=room?(doc.references?.[room.id]||[]):[];
+ for(const [index,photo] of photos.entries()){
+  const img=document.createElement('img');img.src=photo;img.alt='Фото помещения '+(index+1);img.loading='lazy';gallery.append(img);
+ }
+ $('clearReferences').hidden=!photos.length;
+}
+async function photoToCompressedJpeg(file){
+ if(!/^image\/(jpeg|png|webp)$/.test(file.type))throw Error('Нужен JPG, PNG или WebP');
+ const url=URL.createObjectURL(file),img=new Image();
+ try{
+  await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(Error('Не удалось прочитать фотографию'));img.src=url;});
+  const scale=Math.min(1,900/Math.max(img.naturalWidth,img.naturalHeight));
+  const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));
+  const ctx=canvas.getContext('2d');if(!ctx)throw Error('Нет доступа к Canvas');ctx.fillStyle='#ffffff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);
+  for(const quality of [.74,.59,.43,.3]){const photo=canvas.toDataURL('image/jpeg',quality);if(photo.length<175000)return photo;}
+  throw Error('Снимок слишком сложный для компактного сохранения');
+ }finally{URL.revokeObjectURL(url);}
+}
 function updateSelection(){for(const id of ['wallPanel','cornerPanel','roomPanel','openingPanel','furniturePanel'])$(id).hidden=true;
  const sel=selected;if(sel?.kind==='wall'){const e=edges(doc).find(e=>e.id===sel.id);if(e){$('wallPanel').hidden=false;$('wallLength').value=segment(doc,e).length.toFixed(2);$('wallThickness').value=Math.round(100*(doc.walls[e.id]?.thickness||.14));$('removePartition').hidden=!doc.partitions.some(p=>edgeId(p.a,p.b)===e.id);}}
  if(sel?.kind==='node'){const p=doc.nodes[sel.id];if(p){$('cornerPanel').hidden=false;$('cornerX').value=p.x;$('cornerZ').value=p.z;}}
  if(sel?.kind==='room'){const r=doc.rooms.find(r=>r.id===sel.id);if(r){$('roomPanel').hidden=false;$('roomName').value=r.name;$('roomColor').value=r.color;$('roomStats').textContent=`Площадь ${area(doc,r).toFixed(2)} м² · ${r.vertices.length} углов`;}}
  if(sel?.kind==='opening'){const o=doc.openings.find(o=>o.id===sel.id);if(o){$('openingPanel').hidden=false;$('openingKind').value=o.kind;$('openingWidth').value=o.width;}}
- if(sel?.kind==='furniture'){const f=doc.furniture.find(f=>f.id===sel.id);if(f){$('furniturePanel').hidden=false;$('furnitureWidth').value=f.w;$('furnitureDepth').value=f.d;$('furnitureRotation').value=f.rotation||0;}}
+ if(sel?.kind==='furniture'){const f=doc.furniture.find(f=>f.id===sel.id);if(f){$('furniturePanel').hidden=false;$('furnitureWidth').value=f.w;$('furnitureDepth').value=f.d;$('furnitureRotation').value=f.rotation||0;$('furnitureName').value=f.name||'';$('furnitureHeight').value=f.h;}}
 }
+ refreshReferenceGallery();
 function select(kind,id){selected={kind,id};updateSelection();rebuild();}
 function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),3000);}
 function uid(){return 'u'+doc.nextId++;}
@@ -76,13 +146,13 @@ for(const name of ['plan','iso','perspective'])$(name).onclick=()=>setView(name)
 checkedChange('side',e=>{if(e.target.value)setView(e.target.value);});checkedChange('cut',e=>{cut=e.target.checked;rebuild();});$('resetCamera').onclick=resetCamera;
 $('saveJson').onclick=()=>download(new Blob([JSON.stringify(doc,null,2)],{type:'application/json'}),'satellite-apartment.json');
 checkedChange('openJson',async e=>{const f=e.target.files?.[0];if(!f)return;try{if(f.size>22_000_000)throw Error('Файл слишком большой');const raw=JSON.parse(await f.text());doc=raw.version===2?safeDocument(raw):raw.version===1?starter(raw):(()=>{throw Error('Неизвестная версия')})();selected=null;roomSelect();updateSelection();markChanged();resetCamera();status('Проект загружен');}catch(err){status('Ошибка: '+err.message);}finally{e.target.value='';}});
-$('exportGlb').onclick=async()=>{status('Создаю GLB для Blender…');const prevMode=mode,prevCut=cut;try{mode='perspective';cut=false;rebuild();const exporter=new GLTFExporter();const binary=await exporter.parseAsync(world,{binary:true,onlyVisible:true,maxTextureSize:1024});download(new Blob([binary],{type:'model/gltf-binary'}),'my-apartment.glb');status('GLB сохранён');}catch(e){console.error(e);status('Ошибка экспорта: '+e.message);}finally{mode=prevMode;cut=prevCut;rebuild();}};
+$('exportGlb').onclick=async()=>{status('Создаю GLB для Blender…');const prevMode=mode,prevCut=cut;try{mode='perspective';cut=false;await Promise.all(doc.furniture.filter(f=>f.type==='imported'&&f.asset).map(f=>ensureImportedModel(f)));rebuild();const exporter=new GLTFExporter();const binary=await exporter.parseAsync(world,{binary:true,onlyVisible:true,maxTextureSize:1024});download(new Blob([binary],{type:'model/gltf-binary'}),'my-apartment.glb');status('GLB сохранён');}catch(e){console.error(e);status('Ошибка экспорта: '+e.message);}finally{mode=prevMode;cut=prevCut;rebuild();}};
 $('splitWall').onclick=()=>{const e=edges(doc).find(e=>e.id===selected?.id&&selected.kind==='wall');if(!e){status('Нажми на стену, чтобы добавить угол');return;}const id=splitEdge(doc,e);if(id){selected={kind:'node',id};updateSelection();markChanged();}else status('Слишком короткая стена');};
 $('drawWall').onclick=()=>{if(mode!=='plan')setView('plan');drawMode=drawMode==='wall'?null:'wall';drawPoints=[];$('drawWall').classList.toggle('active',!!drawMode);status(drawMode?'Отметь начало и конец перегородки':'Рисование выключено');};
 $('polygonRoom').onclick=()=>{if(mode!=='plan')setView('plan');drawMode='room';drawPoints=[];$('finishPolygon').hidden=false;status('Нажми 3 или больше углов нового помещения');};
 $('finishPolygon').onclick=()=>{const room=addPolygonRoom(doc,drawPoints,'Новая комната');if(!room){status('Контур должен содержать 3 угла и не пересекать сам себя');return;}drawPoints=[];drawMode=null;$('finishPolygon').hidden=true;selected={kind:'room',id:room.id};roomSelect();updateSelection();markChanged();};
 $('addRightRoom').onclick=()=>{const r=addRoom(doc,'Новая комната справа');selected={kind:'room',id:r.id};roomSelect();updateSelection();markChanged();resetCamera();};
-$('removeRoom').onclick=()=>{const id=selected?.id,r=doc.rooms.find(x=>x.id===id);if(!r||!confirm('Удалить комнату «'+r.name+'»?'))return;doc.rooms=doc.rooms.filter(x=>x.id!==id);doc.furniture=doc.furniture.filter(x=>x.room!==id);selected=null;roomSelect();updateSelection();markChanged();};
+$('removeRoom').onclick=()=>{const id=selected?.id,r=doc.rooms.find(x=>x.id===id);if(!r||!confirm('Удалить комнату «'+r.name+'»?'))return;doc.rooms=doc.rooms.filter(x=>x.id!==id);doc.furniture=doc.furniture.filter(x=>x.room!==id);if(doc.references)delete doc.references[id];selected=null;roomSelect();updateSelection();markChanged();};
 $('roomName').onchange=e=>{const r=doc.rooms.find(x=>x.id===selected?.id);if(r){r.name=e.target.value.slice(0,60);roomSelect();markChanged();}};
 $('roomColor').onchange=e=>{const r=doc.rooms.find(x=>x.id===selected?.id);if(r){r.color=e.target.value;markChanged();}};
 for(const [button,axis,delta] of [['roomWPlus','x',.1],['roomWMinus','x',-.1],['roomDPlus','z',.1],['roomDMinus','z',-.1]])$(button).onclick=()=>{if(!resizeRoom(doc,selected?.id,axis,delta)){status('Нельзя изменить размер без пересечения стен');return;}updateSelection();markChanged();};
@@ -94,12 +164,32 @@ $('addWindow').onclick=()=>addOpening('window');$('addDoor').onclick=()=>addOpen
 $('openingKind').onchange=e=>{const o=doc.openings.find(x=>x.id===selected?.id);if(o){o.kind=e.target.value;markChanged();}};
 $('openingWidth').onchange=e=>{const o=doc.openings.find(x=>x.id===selected?.id);if(o){o.width=clamp(Number(e.target.value),.4,3);markChanged();}};
 $('removeOpening').onclick=()=>{doc.openings=doc.openings.filter(x=>x.id!==selected?.id);selected=null;updateSelection();markChanged();};
-$('addFurniture').onclick=()=>{const r=doc.rooms.find(x=>x.id===$('furnitureRoom').value);if(!r)return;const c=center(doc,r),type=$('furnitureType').value;const sizes={sofa:[2,.9,.75],bed:[1.6,2,.6],table:[1,.7,.75],cabinet:[1.2,.65,1.8],box:[1,1,1]};const [w,d,h]=sizes[type];const f={id:uid(),room:r.id,type,x:c.x,z:c.z,w,d,h,rotation:0,color:'#a1a99c'};doc.furniture.push(f);selected={kind:'furniture',id:f.id};updateSelection();markChanged();};
-checkedChange('importGlb',async e=>{const f=e.target.files?.[0];if(!f)return;try{if(f.size>8_000_000)throw Error('Максимум 8 МБ');const reader=new FileReader();const asset=await new Promise((resolve,reject)=>{reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(f);});const room=doc.rooms.find(x=>x.id===$('furnitureRoom').value),c=center(doc,room);const item={id:uid(),room:room.id,type:'imported',asset:asset.replace(/^data:[^;]+;/,'data:model/gltf-binary;'),x:c.x,z:c.z,w:1,d:1,h:1,rotation:0,color:'#a5aaa5'};doc.furniture.push(item);selected={kind:'furniture',id:item.id};updateSelection();markChanged();}catch(err){status('Не удалось импортировать GLB: '+err.message);}finally{e.target.value='';}});
-for(const [input,key] of [['furnitureWidth','w'],['furnitureDepth','d'],['furnitureRotation','rotation']])$(input).onchange=e=>{const f=doc.furniture.find(x=>x.id===selected?.id);if(!f)return;const n=Number(e.target.value);if(!Number.isFinite(n))return;if(key!=='rotation'&&(n<.1||n>6))return;f[key]=n;updateSelection();markChanged();};
+$('addFurniture').onclick=()=>{const r=doc.rooms.find(x=>x.id===$('furnitureRoom').value);if(!r)return;const c=center(doc,r),type=$('furnitureType').value;const sizes={sofa:[2,.9,.75],bed:[1.6,2,.6],table:[1,.7,.75],cabinet:[1.2,.65,1.8],box:[1,1,1]};const [w,d,h]=sizes[type];const f={id:uid(),room:r.id,type,name:({sofa:'Диван',bed:'Кровать',table:'Стол',cabinet:'Шкаф',box:'Предмет мебели'})[type]||'Мебель',x:c.x,z:c.z,w,d,h,rotation:0,color:'#a1a99c'};doc.furniture.push(f);selected={kind:'furniture',id:f.id};updateSelection();markChanged();};
+checkedChange('importGlb',async e=>{const f=e.target.files?.[0];if(!f)return;try{if(f.size>(isMobile?3_000_000:8_000_000))throw Error(isMobile?'На телефоне максимум 3 МБ':'Максимум 8 МБ');const magic=String.fromCharCode(...new Uint8Array(await f.slice(0,4).arrayBuffer()));if(magic!=='glTF')throw Error('Нужен настоящий файл GLB (не OBJ/FBX)');const reader=new FileReader();const asset=await new Promise((resolve,reject)=>{reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(f);});const room=doc.rooms.find(x=>x.id===$('furnitureRoom').value),c=center(doc,room);const item={id:uid(),room:room.id,type:'imported',name:f.name.replace(/\.glb$/i,''),asset:asset.replace(/^data:[^;]+;/,'data:model/gltf-binary;'),x:c.x,z:c.z,w:2,d:.9,h:.8,rotation:0,color:'#a5aaa5'};doc.furniture.push(item);selected={kind:'furniture',id:item.id};updateSelection();markChanged();}catch(err){status('Не удалось импортировать GLB: '+err.message);}finally{e.target.value='';}});
+$('furnitureName').onchange=e=>{const f=doc.furniture.find(x=>x.id===selected?.id);if(f){f.name=String(e.target.value).slice(0,80);markChanged();}};
+$('duplicateFurniture').onclick=()=>{const original=doc.furniture.find(x=>x.id===selected?.id);if(!original)return;const item={...original,id:uid(),x:snap(original.x+.35),z:snap(original.z+.35)};doc.furniture.push(item);const record=assets.get(original.id);if(record)assets.set(item.id,record);selected={kind:'furniture',id:item.id};updateSelection();markChanged();};
+for(const [input,key] of [['furnitureWidth','w'],['furnitureDepth','d'],['furnitureHeight','h'],['furnitureRotation','rotation']])$(input).onchange=e=>{const f=doc.furniture.find(x=>x.id===selected?.id);if(!f)return;const n=Number(e.target.value);if(!Number.isFinite(n))return;if(key!=='rotation'&&(n<.1||n>6))return;f[key]=n;updateSelection();markChanged();};
 $('removeFurniture').onclick=()=>{doc.furniture=doc.furniture.filter(f=>f.id!==selected?.id);selected=null;updateSelection();markChanged();};
 checkedChange('roomPhoto',async e=>{const f=e.target.files?.[0],r=doc.rooms.find(x=>x.id===selected?.id);if(!f||!r)return;if(f.size>2_500_000){status('Фото слишком большое (макс. 2.5 МБ)');return;}try{const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(f);});if(!/^data:image\/(png|jpeg|webp);base64,/.test(data))throw Error('Неподдерживаемое изображение');doc.textures[r.id]=data;markChanged();}catch(err){status(err.message);}finally{e.target.value='';}});
 $('ceiling').value=doc.height;$('ceiling').onchange=e=>{const v=Number(e.target.value);if(v>=2&&v<=5){doc.height=v;markChanged();}else e.target.value=doc.height;};
+checkedChange('roomReference',async e=>{
+ const r=doc.rooms.find(x=>x.id===selected?.id&&selected.kind==='room');
+ const files=[...e.target.files||[]];e.target.value='';
+ if(!r||!files.length)return;
+ try{
+  doc.references??={};
+  const old=doc.references[r.id]||[];
+  const next=[...old];
+  for(const file of files.slice(0,8-next.length))next.push(await photoToCompressedJpeg(file));
+  doc.references[r.id]=next.slice(0,8);refreshReferenceGallery();markChanged();status('Снимки добавлены локально · не опубликованы на GitHub');
+ }catch(err){status('Ошибка фото: '+err.message);}
+});
+$('clearReferences').onclick=()=>{
+ const room=doc.rooms.find(r=>r.id===selected?.id&&selected.kind==='room');
+ if(!room)return;
+ if(doc.references)delete doc.references[room.id];
+ refreshReferenceGallery();markChanged();
+};
 $('resetDemo').onclick=()=>{if(!confirm('Сбросить всю планировку? Сначала сохрани JSON, если нужны изменения.'))return;doc=starter();selected=null;roomSelect();updateSelection();markChanged();resetCamera();};
 // Pointer gestures. Two-finger pinch/pan stays with OrbitControls, while one finger drags a selected handle.
 let pointerStart=null;
