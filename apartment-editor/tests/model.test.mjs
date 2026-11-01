@@ -45,3 +45,51 @@ test('legacy JSON without openings loads default facade',()=>{
  const d=defaultDocument();delete d.openings;
  assert.equal(validateDocument(d).openings.length,4);
 });
+
+import {resizeWall,resizeStructure} from '../model.js';
+
+test('legacy v1 JSON without thickness controls stays compatible',()=>{
+ const d=defaultDocument();delete d.dims.wallThickness;
+ d.extraWalls.push({x1:1,z1:1,x2:3,z2:1});
+ const loaded=validateDocument(d);
+ assert.equal(loaded.dims.wallThickness,.13);
+ assert.equal(loaded.extraWalls[0].thickness,.13);
+});
+
+test('custom partition length and thickness persist',()=>{
+ const d=defaultDocument();const wall={x1:1,z1:1,x2:2,z2:1,thickness:.25};d.extraWalls.push(wall);
+ assert.equal(resizeWall(d,wall,3),true);
+ assert.ok(Math.abs(wall.x2-4)<.00001);
+ const loaded=validateDocument(d);
+ assert.equal(loaded.extraWalls[0].thickness,.25);
+ assert.equal(Math.round(loaded.extraWalls[0].x2),4);
+});
+
+test('wall endpoint length stays within floor and too-short length rejected',()=>{
+ const d=defaultDocument();const wall={x1:11,z1:2,x2:11.3,z2:2};
+ assert.equal(resizeWall(d,wall,5),true);
+ assert.ok(wall.x2<=totalWidth(d.dims));
+ const snapshot={...wall};assert.equal(resizeWall(d,wall,.05),false);
+ assert.deepEqual(wall,snapshot);
+});
+
+test('structural wall dimensions resize adjacent rooms without changing total width',()=>{
+ const d=defaultDocument();const total=totalWidth(d.dims);
+ assert.equal(resizeStructure(d,'seam-0',5),true);
+ assert.equal(d.dims.living,5);
+ assert.equal(d.dims.bedroom,3.4);
+ assert.equal(totalWidth(d.dims),total);
+ assert.equal(resizeStructure(d,'back',5),true);
+ assert.equal(d.dims.depth,5);
+ assert.equal(resizeStructure(d,'hall',2),true);
+ assert.equal(d.dims.hallDepth,2);
+ assert.equal(resizeStructure(d,'seam-0',8.9),false);
+});
+
+test('structural wall thickness overrides validate and survive JSON',()=>{
+ const d=defaultDocument();d.structuralThicknesses={front:.31,'seam-0':.2};
+ const loaded=validateDocument(JSON.parse(JSON.stringify(d)));
+ assert.deepEqual(loaded.structuralThicknesses,d.structuralThicknesses);
+ loaded.structuralThicknesses.front=.6;
+ assert.throws(()=>validateDocument(loaded));
+});

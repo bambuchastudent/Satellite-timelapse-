@@ -24,6 +24,7 @@
     <label>Кухня <input data-dim="kitchen" type="number" min="2" max="8" step="0.1" value="3.1"/></label>
     <label>Глубина комнат <input data-dim="depth" type="number" min="2.5" max="9" step="0.1" value="4.1"/></label>
     <label>Глубина коридора <input data-dim="hallDepth" type="number" min="0.8" max="3" step="0.1" value="1.4"/></label>
+    <label>Толщина стен, м <input data-dim="wallThickness" type="number" min=".06" max=".5" step=".01" value=".13"/></label>
     <label>Высота потолков <input data-dim="height" type="number" min="2" max="4.5" step="0.05" value="2.65"/></label>
     <label>Ширина балкона <input data-dim="balconyWidth" type="number" min="0.8" max="3" step="0.1" value="1.6"/></label>
     <label>Вынос балкона <input data-dim="balconyDepth" type="number" min="0.6" max="3" step="0.1" value="1.65"/></label>
@@ -35,7 +36,13 @@
     <div class="selected" id="wallPanel" hidden><strong>Выбранная перегородка</strong>
       <div class="split"><label>X1 <input id="wallX1" type="number" step=".1"></label><label>Z1 <input id="wallZ1" type="number" step=".1"></label></div>
       <div class="split"><label>X2 <input id="wallX2" type="number" step=".1"></label><label>Z2 <input id="wallZ2" type="number" step=".1"></label></div>
+      <div class="split"><label>Длина, м <input id="wallLength" type="number" min=".1" max="30" step=".05"></label><label>Толщина, см <input id="wallThickness" type="number" min="6" max="50" step="1"></label></div>
       <button id="deleteWall" class="danger small full">Удалить перегородку</button>
+    </div>
+    <div class="selected" id="structuralPanel" hidden><strong id="structuralName">Основная стена</strong>
+      <label id="structuralSizeRow"><span id="structuralSizeName">Размер, м</span><input id="structuralSize" type="number" min=".8" max="9" step=".05"></label>
+      <label>Толщина этой стены, см<input id="structuralThickness" type="number" min="6" max="50" step="1"></label>
+      <p class="help" id="structuralHint">Зелёные метки позволяют передвигать границы на плане.</p>
     </div>
   </section>
   <section><h2>Окна и двери</h2>
@@ -70,11 +77,11 @@
 </aside>
 <main class="main">
   <header class="toolbar"><div><strong>Редактор квартиры</strong><span id="status">Готово</span></div><div class="actions">
-  <button id="view2d" class="active">▦ План сверху</button><button id="view3d">◈ 3D</button><label class="check"><input id="cutWalls" type="checkbox" checked/> Срез стен</label>
+  <button id="view2d" class="active">▦ План сверху</button><button id="view3d">◈ 3D</button><select id="sideView" aria-label="Вид сбоку"><option value="">Виды сбоку</option><option value="front">Фасад (окна)</option><option value="back">Сзади</option><option value="left">Слева</option><option value="right">Справа</option></select><label class="check"><input id="cutWalls" type="checkbox" checked/> Срез стен</label>
   <button id="saveJson">Сохранить JSON</button><label class="fileButton">Открыть JSON<input id="openJson" type="file" accept=".json,application/json" hidden/></label><button id="exportGlb" class="accent">Экспорт GLB</button>
   </div></header>
   <div id="viewport" class="viewport"><div class="hud"><strong id="modeLabel">План сверху</strong><small id="modeHint">Перетаскивай мебель, стены, окна и границы комнат</small></div><div class="scale" id="sceneInfo">—</div><div id="error" class="error" hidden></div></div>
-  <footer><span>Модель в метрах · локальное сохранение · MIT · управление мышью и пальцем</span><button id="resetCamera" class="small">Вернуть камеру</button></footer>
+  <footer><span>План / 3D / фасады · проект сохраняется в браузере · MIT</span><button id="resetCamera" class="small">Вернуть камеру</button></footer>
 </main></div>
 <script type="module" src="app.js"></script>
 </body>

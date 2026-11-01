@@ -3,8 +3,9 @@ export const ROOM_IDS = ['living','bedroom','kitchen'];
 export const ROOM_NAMES = {living:'Гостиная',bedroom:'Спальня',kitchen:'Кухня'};
 export const DEFAULT = Object.freeze({
   version:1, units:'m',
-  dims:{living:4.5,bedroom:3.9,kitchen:3.1,depth:4.1,hallDepth:1.4,height:2.65,balconyWidth:1.6,balconyDepth:1.65},
+  dims:{living:4.5,bedroom:3.9,kitchen:3.1,depth:4.1,hallDepth:1.4,height:2.65,balconyWidth:1.6,balconyDepth:1.65,wallThickness:.13},
   extraWalls:[],
+  structuralThicknesses:{},
   openings:[
     {id:'window-living',kind:'window',x:1.3,w:1.3},
     {id:'balcony-door',kind:'door',x:4.05,w:.85},
@@ -22,7 +23,7 @@ export const DEFAULT = Object.freeze({
 });
 const copy = v => JSON.parse(JSON.stringify(v));
 export function defaultDocument(){ return copy(DEFAULT); }
-const limits={living:[2,9],bedroom:[2,9],kitchen:[2,8],depth:[2.5,9],hallDepth:[.8,3],height:[2,4.5],balconyWidth:[.8,3],balconyDepth:[.6,3]};
+const limits={living:[2,9],bedroom:[2,9],kitchen:[2,8],depth:[2.5,9],hallDepth:[.8,3],height:[2,4.5],balconyWidth:[.8,3],balconyDepth:[.6,3],wallThickness:[.06,.5]};
 export function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
 export function totalWidth(d){return d.living+d.bedroom+d.kitchen;}
 export function bounds(doc,room){
@@ -38,13 +39,21 @@ export function validateDocument(input){
  if(!input||typeof input!=='object'||input.version!==1||!input.dims||!Array.isArray(input.furniture))throw Error('Ожидался JSON проекта версии 1');
  const doc=defaultDocument();
  for(const [key,[min,max]] of Object.entries(limits)){
-   const value=Number(input.dims[key]);
+   const value=Number(input.dims[key]??doc.dims[key]);
    if(!Number.isFinite(value)||value<min||value>max)throw Error(`Недопустимый размер ${key}: ${input.dims[key]} (${min}–${max} м)`);
    doc.dims[key]=value;
  }
  for(const key of Object.keys(doc.finishes)){
    const value=input.finishes?.[key];
    if(typeof value==='string' && /^#[0-9a-fA-F]{6}$/.test(value))doc.finishes[key]=value;
+ }
+ doc.structuralThicknesses={};
+ const structuralIds=['left','right','front','back','hall','seam-0','seam-1'];
+ for(const [id,value] of Object.entries(input.structuralThicknesses??{})){
+  if(!structuralIds.includes(id))continue;
+  const width=Number(value);
+  if(!Number.isFinite(width)||width<.06||width>.5)throw Error('Недопустимая толщина стены');
+  doc.structuralThicknesses[id]=width;
  }
  doc.extraWalls=[];
  if(input.extraWalls!==undefined && !Array.isArray(input.extraWalls))throw Error('Неверный формат перегородок');
@@ -56,6 +65,8 @@ export function validateDocument(input){
   if(Math.min(w.x1,w.x2)<0||Math.max(w.x1,w.x2)>totalWidth(doc.dims)||Math.min(w.z1,w.z2)<-doc.dims.balconyDepth||Math.max(w.z1,w.z2)>doc.dims.depth+doc.dims.hallDepth)throw Error('Стена выходит за границы чертежа');
   const len=Math.hypot(w.x2-w.x1,w.z2-w.z1);
   if(len<.1||len>30)throw Error('Длина перегородки должна быть от 0.1 до 30 м');
+  w.thickness=Number(wall.thickness??doc.dims.wallThickness);
+  if(!Number.isFinite(w.thickness)||w.thickness<.06||w.thickness>.5)throw Error('Недопустимая толщина перегородки');
   doc.extraWalls.push(w);
  }
  doc.openings=[];
@@ -98,3 +109,40 @@ export function keepFurnitureWithinRooms(doc){
  for(const o of doc.furniture){const b=bounds(doc,o.room);const pad=Math.max(o.w,o.d)/2;const px=Math.min(pad,(b.maxX-b.minX)/2),pz=Math.min(pad,(b.maxZ-b.minZ)/2);o.x=clamp(o.x,b.minX+px,b.maxX-px);o.z=clamp(o.z,b.minZ+pz,b.maxZ-pz);}
 }
 export function roomForPosition(doc,x,z){return ROOM_IDS.find(k=>{const b=bounds(doc,k);return x>=b.minX&&x<=b.maxX&&z>=b.minZ&&z<=b.maxZ;})??null;}
+
+/** Change a custom wall's length while keeping its first endpoint fixed, within the floor bounds. */
+export function resizeWall(doc, wall, targetLength){
+ const len=Math.hypot(wall.x2-wall.x1,wall.z2-wall.z1);
+ if(!Number.isFinite(targetLength)||targetLength<.1||targetLength>30||len<.1)return false;
+ const ux=(wall.x2-wall.x1)/len,uz=(wall.z2-wall.z1)/len,d=doc.dims;
+ const xMax=totalWidth(d), zMin=-d.balconyDepth,zMax=d.depth+d.hallDepth;
+ const xLimit=ux>0?(xMax-wall.x1)/ux:ux<0?-wall.x1/ux:Infinity;
+ const zLimit=uz>0?(zMax-wall.z1)/uz:uz<0?(zMin-wall.z1)/uz:Infinity;
+ const allowed=Math.min(targetLength,xLimit,zLimit);
+ if(allowed<.1)return false;
+ wall.x2=Math.round((wall.x1+ux*allowed)*100)/100;
+ wall.z2=Math.round((wall.z1+uz*allowed)*100)/100;
+ return true;
+}
+/** Structural wall width/room sizing; return false for non-adjustable boundary. */
+export function resizeStructure(doc,id,value){
+ const d=doc.dims,n=Number(value);
+ if(!Number.isFinite(n))return false;
+ if(id==='seam-0'){
+  const sum=d.living+d.bedroom;if(n<2||n>9||sum-n<2||sum-n>9)return false;
+  const delta=n-d.living;d.living=n;d.bedroom-=delta;
+  for(const f of doc.furniture)if(f.room==='bedroom')f.x+=delta;
+ } else if(id==='seam-1'){
+  const sum=d.bedroom+d.kitchen;if(n<2||n>9||sum-n<2||sum-n>8)return false;
+  const delta=n-d.bedroom;d.bedroom=n;d.kitchen-=delta;
+  for(const f of doc.furniture)if(f.room==='kitchen')f.x+=delta;
+ } else if(id==='right'){
+  if(n<2||n>8)return false;d.kitchen=n;
+ } else if(id==='back'){
+  if(n<2.5||n>9)return false;d.depth=n;
+ } else if(id==='hall'){
+  if(n<.8||n>3)return false;d.hallDepth=n;
+ } else return false;
+ keepFurnitureWithinRooms(doc);
+ return true;
+}
