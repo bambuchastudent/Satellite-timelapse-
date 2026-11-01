@@ -135,8 +135,8 @@ function updateSelection(){for(const id of ['wallPanel','cornerPanel','roomPanel
  if(sel?.kind==='room'){const r=doc.rooms.find(r=>r.id===sel.id);if(r){$('roomPanel').hidden=false;$('roomName').value=r.name;$('roomColor').value=r.color;$('roomStats').textContent=`Площадь ${area(doc,r).toFixed(2)} м² · ${r.vertices.length} углов`;}}
  if(sel?.kind==='opening'){const o=doc.openings.find(o=>o.id===sel.id);if(o){$('openingPanel').hidden=false;$('openingKind').value=o.kind;$('openingWidth').value=o.width;}}
  if(sel?.kind==='furniture'){const f=doc.furniture.find(f=>f.id===sel.id);if(f){$('furniturePanel').hidden=false;$('furnitureWidth').value=f.w;$('furnitureDepth').value=f.d;$('furnitureRotation').value=f.rotation||0;$('furnitureName').value=f.name||'';$('furnitureHeight').value=f.h;}}
-}
  refreshReferenceGallery();
+}
 function select(kind,id){selected={kind,id};updateSelection();rebuild();}
 function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),3000);}
 function uid(){return 'u'+doc.nextId++;}
